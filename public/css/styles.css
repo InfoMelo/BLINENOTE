@@ -1,0 +1,760 @@
+/* ================================
+   BLineNote - Aplikasi Catatan Suara AI
+   Stylesheet Utama
+   ================================ */
+
+/* Custom Tailwind Configuration */
+:root {
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    
+    --indigo-500: #6366f1;
+    --indigo-600: #4f46e5;
+    --indigo-700: #4338ca;
+    
+    --teal-500: #14b8a6;
+    --teal-600: #0d9488;
+}
+
+/* ================================
+   Notification Styles (Remove Inline Styles)
+   ================================ */
+
+.error-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ef4444;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    z-index: 9999;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.warning-notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: #f59e0b;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    z-index: 9999;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.notification-close-btn {
+    margin-top: 8px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.notification-close-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* ================================
+   Preview Text Truncation
+   ================================ */
+
+.line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.5;
+    max-height: 3em;
+}
+
+/* ================================
+   Rich Text Editor Toolbar
+   ================================ */
+
+.toolbar-btn {
+    padding: 8px;
+    color: #64748b;
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toolbar-btn:hover {
+    background-color: #e2e8f0;
+    color: #1e293b;
+}
+
+.toolbar-btn.active {
+    background-color: #3b82f6;
+    color: white;
+}
+
+/* ================================
+   Link Styling in Rich Text Editor
+   ================================ */
+
+#hasil-teks a,
+#detail-content a {
+    color: #3b82f6;
+    text-decoration: underline;
+    text-decoration-color: #3b82f6;
+    text-underline-offset: 2px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    word-break: break-all;
+}
+
+#hasil-teks a:hover,
+#detail-content a:hover {
+    color: #1d4ed8;
+    text-decoration-color: #1d4ed8;
+    text-decoration-thickness: 2px;
+    background-color: rgba(59, 130, 246, 0.1);
+    padding: 1px 2px;
+    border-radius: 3px;
+}
+
+#hasil-teks a:visited,
+#detail-content a:visited {
+    color: #7c3aed;
+    text-decoration-color: #7c3aed;
+}
+
+#hasil-teks a:visited:hover,
+#detail-content a:visited:hover {
+    color: #5b21b6;
+    text-decoration-color: #5b21b6;
+    background-color: rgba(124, 58, 237, 0.1);
+}
+
+/* Dark mode link styling */
+.dark #hasil-teks a,
+.dark #detail-content a {
+    color: #60a5fa;
+    text-decoration-color: #60a5fa;
+}
+
+.dark #hasil-teks a:hover,
+.dark #detail-content a:hover {
+    color: #93c5fd;
+    text-decoration-color: #93c5fd;
+    background-color: rgba(96, 165, 250, 0.2);
+}
+
+.dark #hasil-teks a:visited,
+.dark #detail-content a:visited {
+    color: #a78bfa;
+    text-decoration-color: #a78bfa;
+}
+
+.dark #hasil-teks a:visited:hover,
+.dark #detail-content a:visited:hover {
+    color: #c4b5fd;
+    text-decoration-color: #c4b5fd;
+    background-color: rgba(167, 139, 250, 0.2);
+}
+
+/* Link with external indicator */
+#hasil-teks a[target="_blank"]:after,
+#detail-content a[target="_blank"]:after {
+    content: " ↗";
+    font-size: 0.75em;
+    opacity: 0.7;
+    margin-left: 2px;
+}
+
+/* Auto-detected link styling */
+#hasil-teks a.auto-detected-link,
+#detail-content a.auto-detected-link {
+    border-bottom: 2px dotted #3b82f6;
+    text-decoration: none;
+    position: relative;
+    animation: linkFadeIn 0.3s ease-in;
+}
+
+#hasil-teks a.auto-detected-link:hover,
+#detail-content a.auto-detected-link:hover {
+    border-bottom-style: solid;
+    text-decoration: underline;
+}
+
+/* Auto-detection fade-in animation */
+@keyframes linkFadeIn {
+    from {
+        background-color: rgba(59, 130, 246, 0.3);
+        transform: scale(1.02);
+    }
+    to {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+/* URL being typed styling (future enhancement) */
+.url-being-typed {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-radius: 3px;
+    padding: 1px 2px;
+    border: 1px dotted #3b82f6;
+    animation: urlPulse 1s infinite;
+}
+
+@keyframes urlPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Dark mode auto-detected links */
+.dark #hasil-teks a.auto-detected-link,
+.dark #detail-content a.auto-detected-link {
+    border-bottom-color: #60a5fa;
+}
+
+/* Auto-detection notification */
+.url-detection-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #10b981;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    animation: slideInUp 0.3s ease-out;
+}
+
+/* Auto URL detection toggle button */
+#auto-url-toggle {
+    transition: all 0.3s ease;
+}
+
+#auto-url-toggle.auto-url-enabled {
+    background: #10b981 !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+#auto-url-toggle.auto-url-disabled {
+    background: #6b7280 !important;
+    color: #9ca3af !important;
+    opacity: 0.7;
+}
+
+#auto-url-toggle.auto-url-enabled:hover {
+    background: #059669 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+#auto-url-toggle.auto-url-disabled:hover {
+    background: #4b5563 !important;
+    transform: translateY(-1px);
+}
+
+/* Dark mode auto URL toggle */
+.dark #auto-url-toggle.auto-url-enabled {
+    background: #065f46 !important;
+    color: #d1fae5 !important;
+}
+
+.dark #auto-url-toggle.auto-url-disabled {
+    background: #374151 !important;
+    color: #6b7280 !important;
+}
+
+@keyframes slideInUp {
+}
+
+.url-detection-notification i {
+    font-size: 16px;
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+}
+
+/* ================================
+   Link Context Menu (Future Enhancement)
+   ================================ */
+
+.link-context-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    z-index: 1000;
+    display: none;
+}
+
+.link-context-menu button {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    text-align: left;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+}
+
+.link-context-menu button:hover {
+    background-color: #f3f4f6;
+}
+
+.dark .link-context-menu {
+    background: #374151;
+    border-color: #4b5563;
+}
+
+.dark .link-context-menu button {
+    color: #d1d5db;
+}
+
+.dark .link-context-menu button:hover {
+    background-color: #4b5563;
+}
+
+.toolbar-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #6366f1;
+}
+
+.toolbar-btn.active {
+    background-color: #e0e7ff;
+    color: #4338ca;
+}
+
+/* Dark mode toolbar */
+.dark .toolbar-btn {
+    color: #94a3b8;
+}
+
+.dark .toolbar-btn:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+.dark .toolbar-btn.active {
+    background-color: #312e81;
+    color: #a5b4fc;
+}
+
+/* Rich Text Editor Content Styling */
+#hasil-teks {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+#hasil-teks strong, 
+#hasil-teks b {
+    font-weight: bold;
+}
+
+#hasil-teks em, 
+#hasil-teks i {
+    font-style: italic;
+}
+
+#hasil-teks u {
+    text-decoration: underline;
+}
+
+#hasil-teks ul {
+    list-style-type: disc;
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+#hasil-teks ol {
+    list-style-type: decimal;
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+#hasil-teks li {
+    margin-bottom: 5px;
+}
+
+#hasil-teks p {
+    margin-bottom: 10px;
+}
+
+#hasil-teks br {
+    line-height: 1.5;
+}
+
+/* ================================
+   Animasi dan Transisi
+   ================================ */
+
+/* Recording indicator pulse animation */
+.recording-indicator {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 15px rgba(220, 38, 38, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    }
+}
+
+/* Loader/Spinner animation */
+.loader {
+    border: 4px solid #e2e8f0;
+    border-top: 4px solid #6366f1;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Loading state untuk status */
+.loading {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 4px solid #6366f1;
+}
+
+.loading::before {
+    content: "💾 ";
+    animation: pulse-icon 1s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-icon {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Button disabled state */
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ================================
+   Content Editable Styling
+   ================================ */
+
+[contenteditable]:empty:before {
+    content: attr(placeholder);
+    color: #94a3b8;
+}
+
+/* ================================
+   Checkbox Styling
+   ================================ */
+
+.checkbox-item {
+    margin: 8px 0;
+    padding: 4px 0;
+    display: flex;
+    align-items: flex-start;
+    transition: all 0.2s ease;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    width: 100%;
+    gap: 8px;
+}
+
+.checkbox-input {
+    opacity: 0;
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.checkbox-custom {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.checkbox-custom::after {
+    content: '✓';
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.checkbox-input:checked + .checkbox-custom {
+    background: #4f46e5;
+    border-color: #4f46e5;
+}
+
+.checkbox-input:checked + .checkbox-custom::after {
+    opacity: 1;
+}
+
+.checkbox-text {
+    flex: 1;
+    min-height: 20px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    outline: none;
+    line-height: 1.4;
+}
+
+.checkbox-text:focus {
+    background: rgba(79, 70, 229, 0.05);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.checkbox-text:empty::before {
+    content: attr(data-placeholder);
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.checkbox-checked .checkbox-text {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.text-completed {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.checkbox-item:hover .checkbox-custom {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+/* Dark mode checkbox styling */
+.dark .checkbox-custom {
+    background: #374151;
+    border-color: #6b7280;
+}
+
+.dark .checkbox-input:checked + .checkbox-custom {
+    background: #6366f1;
+    border-color: #6366f1;
+}
+
+.dark .checkbox-text {
+    color: #e2e8f0;
+}
+
+.dark .checkbox-text:focus {
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.dark .checkbox-text:empty::before {
+    color: #6b7280;
+}
+
+.dark .checkbox-item:hover .checkbox-custom {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* ================================
+   Speaking Indicator
+   ================================ */
+
+.is-speaking {
+    box-shadow: 0 0 0 2px #4f46e5;
+}
+
+/* ================================
+   Glassmorphism Card Style
+   ================================ */
+
+.glass-card {
+    background: rgba(255, 255, 255, 0.65);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-card {
+    background: rgba(30, 41, 59, 0.65); /* slate-800 */
+    border: 1px solid rgba(51, 65, 85, 0.5); /* slate-700 */
+}
+
+/* ================================
+   Mobile Navigation Styling
+   ================================ */
+
+#mobile-nav .active {
+    color: #4f46e5; /* indigo-600 */
+}
+
+.dark #mobile-nav .active {
+    color: #a5b4fc; /* indigo-300 */
+}
+
+/* ================================
+   FAB Recording Indicator
+   ================================ */
+
+#fab-rekam.recording-indicator {
+    animation: pulse 1.5s infinite;
+}
+
+/* ================================
+   Responsive Design Utilities
+   ================================ */
+
+/* Ensure proper spacing on mobile */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+/* ================================
+   Custom Scrollbar
+   ================================ */
+
+/* Webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.5);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.7);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(71, 85, 105, 0.7);
+}
+
+/* ================================
+   Focus States
+   ================================ */
+
+button:focus-visible,
+input:focus-visible,
+[contenteditable]:focus-visible {
+    outline: 2px solid var(--indigo-500);
+    outline-offset: 2px;
+}
+
+/* ================================
+   Hover Effects
+   ================================ */
+
+.glass-card:hover {
+    transform: translateY(-1px);
+    transition: transform 0.2s ease-in-out;
+}
+
+/* ================================
+   Print Styles
+   ================================ */
+
+@media print {
+    .no-print,
+    #mobile-nav,
+    #fab-rekam,
+    button {
+        display: none !important;
+    }
+    
+    .glass-card {
+        background: white !important;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+    }
+}
