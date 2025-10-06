@@ -20,6 +20,7 @@ debug.js
 *.md
 !README.md
 !VERCEL_DEPLOYMENT_GUIDE.md
+!GITHUB_PUSH_INSTRUCTIONS.md
 docs/
 test-*.html
 checkbox-fix-test.html
