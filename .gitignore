@@ -21,11 +21,16 @@ debug.js
 !README.md
 !VERCEL_DEPLOYMENT_GUIDE.md
 !GITHUB_PUSH_INSTRUCTIONS.md
+!MANUAL_UPLOAD_GUIDE.md
 docs/
 test-*.html
 checkbox-fix-test.html
 analysis-*.md
 bug-fix-report.md
+
+# Deployment files (don't commit ZIP)
+*.zip
+BLINENOTE-DEPLOYMENT-FILES/
 
 # IDE Files
 .vscode/
