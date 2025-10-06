@@ -1,0 +1,31 @@
+{
+  "name": "blinenote-app",
+  "version": "1.0.0",
+  "description": "BLineNote - Aplikasi Catatan Suara AI",
+  "main": "server.js",
+  "scripts": {
+    "build": "echo 'Static build completed'",
+    "start": "echo 'Static site ready'",
+    "dev": "echo 'Development server'",
+    "vercel-build": "echo 'Building for Vercel deployment'",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "voice-notes",
+    "ai",
+    "firebase",
+    "web-app",
+    "progressive-web-app"
+  ],
+  "author": "BLineNote Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/blinenote"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

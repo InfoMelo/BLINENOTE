@@ -1,0 +1,69 @@
+# BLineNote - Git Ignore File
+
+# Environment Variables (IMPORTANT!)
+.env
+.env.local
+.env.production
+.env.development
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development files that shouldn't be deployed
+server.js
+debug.js
+
+# Documentation and test files (keep repo clean)
+*.md
+!README.md
+!VERCEL_DEPLOYMENT_GUIDE.md
+docs/
+test-*.html
+checkbox-fix-test.html
+analysis-*.md
+bug-fix-report.md
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary Files
+temp/
+tmp/
+*.tmp
+
+# Build Files
+dist/
+build/
+.cache/
+
+# Firebase
+.firebase/
+firebase-debug.log
+.firebaserc
+
+# Backup Files
+*.backup
+*.bak
+
+# Development Files
+debug.js
