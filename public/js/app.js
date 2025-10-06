@@ -194,7 +194,29 @@ const saveNote = async () => {
         }
         
         if (!userId) {
-            throw new Error('Anda harus login terlebih dahulu');
+            // Demo mode: save to localStorage instead of Firebase
+            console.log('📱 Demo mode: saving to localStorage (user not logged in)');
+            
+            const demoData = {
+                text: textContent,
+                html: htmlContent,
+                tag: tagContent || '',
+                timestamp: new Date().toISOString(),
+                wordCount: textContent.split(/\s+/).filter(word => word.length > 0).length,
+                characterCount: textContent.length,
+                isDemo: true
+            };
+            
+            // Save to localStorage
+            const savedNotes = JSON.parse(localStorage.getItem('blinenoteDemoNotes') || '[]');
+            savedNotes.unshift(demoData);
+            localStorage.setItem('blinenoteDemoNotes', JSON.stringify(savedNotes));
+            
+            elements.statusDiv.textContent = '✅ Catatan disimpan dalam mode demo! (Login untuk simpan permanent)';
+            clearEditor();
+            
+            console.log('✅ Demo save completed');
+            return;
         }
         
         // Prepare data
@@ -1130,6 +1152,22 @@ const setupEventListeners = () => {
     if (elements.tombolLogout) elements.tombolLogout.addEventListener('click', handleLogout);
     if (elements.authToggleBtn) elements.authToggleBtn.addEventListener('click', toggleAuthMode);
     if (elements.authToggleBtn2) elements.authToggleBtn2.addEventListener('click', toggleAuthMode);
+    
+    // Demo mode button
+    const demoModeBtn = document.getElementById('demo-mode-btn');
+    if (demoModeBtn) {
+        demoModeBtn.addEventListener('click', () => {
+            console.log('🚀 Demo mode activated');
+            // Hide auth page, show main app
+            elements.authPageContainer.style.display = 'none';
+            elements.mainContentContainer.style.display = 'flex';
+            elements.statusDiv.textContent = '🚀 Mode Demo Aktif - Data disimpan lokal saja';
+            
+            // Set demo user indicator
+            elements.userEmail.textContent = 'Mode Demo';
+            console.log('✅ Demo mode ready');
+        });
+    }
     
     // Form submission prevention
     const loginForm = document.getElementById('login-form');
