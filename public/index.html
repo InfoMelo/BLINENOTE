@@ -28,34 +28,8 @@
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Tailwind CSS - Production -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
-    <script>
-        // Kustomisasi Tailwind CSS untuk Production
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        slate: {
-                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
-                            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
-                            800: '#1e293b', 900: '#0f172a',
-                        },
-                        indigo: {
-                            500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
-                        },
-                        teal: {
-                            500: '#14b8a6', 600: '#0d9488',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind CSS - Production Build -->
+    <link rel="stylesheet" href="./css/styles.css">
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="css/styles.css">
@@ -332,9 +306,6 @@
     </div>
 
     
-    <!-- Debug Helper (for development) -->
-    <script src="debug.js"></script>
-    
     <!-- Error Handler -->
     <script>
         // Global error handler
@@ -494,8 +465,6 @@
     <!-- Alternative recorder for Electron -->
     <script src="js/electron-recorder.js"></script>
     
-    <!-- Debug script for speech recognition -->
-    <script src="../test-speech.js"></script>
 </body>
 </html>
 
