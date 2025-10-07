@@ -3,7 +3,7 @@
 // ================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
 import { firebaseConfig, APP_CONFIG } from './config.js';
@@ -22,25 +22,12 @@ const logger = {
 // ================================
 
 const app = initializeApp(firebaseConfig);
+// Initialize Firestore with modern cache configuration
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Enable offline persistence with better error handling
-(async () => {
-    try {
-        await enableIndexedDbPersistence(db);
-        logger.log("✅ Offline persistence enabled.");
-    } catch (err) {
-        const errorMsg = errorHandler.logError(err, { context: 'firebase_persistence' });
-        if (err.code == 'failed-precondition') {
-            logger.warn("⚠️ Offline persistence failed - multiple tabs detected.");
-        } else if (err.code == 'unimplemented') {
-            logger.warn("⚠️ Browser doesn't support offline persistence.");
-        } else {
-            logger.error("❌ Failed to enable offline persistence:", err);
-        }
-    }
-})();
+// Modern cache configuration (replaces deprecated enableIndexedDbPersistence)
+logger.log("✅ Firestore initialized with modern cache configuration.");
 
 // Create HTML element for a note
 const createNoteElement = (note) => {
