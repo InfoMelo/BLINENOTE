@@ -4,7 +4,7 @@
   "description": "BLineNote - Aplikasi Catatan Suara AI",
   "main": "server.js",
   "scripts": {
-    "build": "npx tailwindcss -i ./css/styles.css -o ./public/css/styles.css --minify",
+    "build": "npm install --prefer-offline --no-audit --progress=false && npx tailwindcss -i ./css/styles.css -o ./public/css/styles.css --minify",
     "dev": "npx tailwindcss -i ./css/styles.css -o ./public/css/styles.css --watch",
     "start": "echo 'Static site ready'"
   },
@@ -24,12 +24,12 @@
     "type": "git",
     "url": "https://github.com/username/blinenote"
   },
-  "devDependencies": {
+  "dependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/typography": "^0.5.19",
     "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.14"
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5"
   }
 }
