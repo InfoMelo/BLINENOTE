@@ -194,6 +194,27 @@ const setupNotesListener = (currentUserId) => {
     }
 };
 
+const setupLocalDevNotes = () => {
+    try {
+        console.log('🧪 Setting up local development notes');
+        
+        // Load notes from localStorage
+        const localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+        allNotes = localNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        renderTagFilters(allNotes);
+        applyFilters();
+        
+        console.log(`📝 Loaded ${allNotes.length} local development notes`);
+        
+    } catch (error) {
+        console.error('❌ Error loading local development notes:', error);
+        allNotes = [];
+        renderTagFilters(allNotes);
+        applyFilters();
+    }
+};
+
 // ================================
 // Save Functions - Clean Implementation
 // ================================
@@ -233,8 +254,66 @@ const saveNote = async () => {
             throw new Error('Teks tidak boleh kosong');
         }
         
-        if (!userId) {
+        // Check if running in development mode (localhost)
+        const forceProductionMode = true; // Set to false to re-enable dev mode
+        const isLocalhost = !forceProductionMode && (
+            window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname === ''
+        );
+        
+        // Authentication check - allow localhost testing
+        if (!userId && !isLocalhost) {
             elements.statusDiv.textContent = '❌ Silakan login terlebih dahulu';
+            return;
+        }
+        
+        // Handle local development testing
+        if (!userId && isLocalhost) {
+            console.log('🧪 Development mode: Using localStorage fallback');
+            
+            const noteData = {
+                id: editingNoteId || Date.now().toString(),
+                text: textContent,
+                html: htmlContent,
+                tag: tagContent || '',
+                wordCount: textContent.split(/\s+/).filter(word => word.length > 0).length,
+                characterCount: textContent.length,
+                timestamp: new Date().toISOString(),
+                userId: 'local-dev-user'
+            };
+            
+            // Get existing notes from localStorage
+            let localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+            
+            if (editingNoteId) {
+                // Update existing note
+                const noteIndex = localNotes.findIndex(note => note.id === editingNoteId);
+                if (noteIndex !== -1) {
+                    localNotes[noteIndex] = { ...localNotes[noteIndex], ...noteData };
+                    elements.statusDiv.textContent = '✅ Catatan berhasil diperbarui! (Mode Development)';
+                } else {
+                    elements.statusDiv.textContent = '❌ Catatan tidak ditemukan untuk diperbarui';
+                    return;
+                }
+            } else {
+                // Add new note
+                localNotes.unshift(noteData);
+                elements.statusDiv.textContent = '✅ Catatan berhasil disimpan! (Mode Development)';
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('dev-notes', JSON.stringify(localNotes));
+            
+            // Clear editor
+            clearEditor();
+            
+            // Switch to notes view on mobile
+            if (window.innerWidth < 768) {
+                switchView('notes');
+            }
+            
+            console.log('✅ Local save completed');
             return;
         }
         
@@ -421,6 +500,22 @@ const updateMobileNav = () => {
 let recognition;
 
 const initializeSpeechRecognition = () => {
+    console.log('🔍 Initializing speech recognition...');
+    console.log('User agent:', navigator.userAgent);
+    console.log('Available APIs:', {
+        SpeechRecognition: 'SpeechRecognition' in window,
+        webkitSpeechRecognition: 'webkitSpeechRecognition' in window,
+        mediaDevices: 'mediaDevices' in navigator,
+        ElectronRecorder: 'ElectronRecorder' in window
+    });
+    
+    // Check if we're in Electron and use alternative recording
+    if (navigator.userAgent.includes('Electron')) {
+        console.log('🖥️ Running in Electron, trying alternative recording...');
+        initializeElectronRecording();
+        return;
+    }
+    
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
@@ -451,13 +546,33 @@ const initializeSpeechRecognition = () => {
             const combinedText = pausedTranscript + finalTranscript + interimTranscript;
             elements.hasilTeksDiv.innerHTML = combinedText.trim();
             
+            // Update save button state when content changes
+            checkContentAndUpdateButtons();
+            
             // Auto-scroll to bottom
             elements.hasilTeksDiv.scrollTop = elements.hasilTeksDiv.scrollHeight;
         };
         
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            elements.statusDiv.textContent = `❌ Error pengenalan suara: ${event.error}`;
+            let errorMessage = '';
+            switch(event.error) {
+                case 'not-allowed':
+                    errorMessage = 'Microphone access ditolak. Mohon izinkan akses microphone.';
+                    break;
+                case 'no-speech':
+                    errorMessage = 'Tidak ada suara yang terdeteksi.';
+                    break;
+                case 'audio-capture':
+                    errorMessage = 'Gagal mengakses microphone.';
+                    break;
+                case 'network':
+                    errorMessage = 'Koneksi internet diperlukan untuk speech recognition.';
+                    break;
+                default:
+                    errorMessage = `Error pengenalan suara: ${event.error}`;
+            }
+            elements.statusDiv.textContent = `❌ ${errorMessage}`;
             isRecording = false;
             updateRecordingUI();
         };
@@ -478,10 +593,58 @@ const initializeSpeechRecognition = () => {
         };
         
         window.recognition = recognition;
-        console.log('✅ Speech recognition initialized');
+        console.log('✅ Speech recognition initialized successfully');
+        elements.statusDiv.textContent = '✅ Speech recognition siap digunakan';
     } else {
-        console.warn('⚠️ Speech recognition not supported');
-        elements.statusDiv.textContent = '❌ Browser tidak mendukung pengenalan suara';
+        console.warn('❌ Speech Recognition API not supported');
+        elements.statusDiv.textContent = '❌ Browser tidak mendukung speech recognition. Gunakan Chrome/Edge untuk fitur ini.';
+        
+        // Disable recording buttons
+        if (elements.tombolRekam) elements.tombolRekam.disabled = true;
+        if (elements.tombolRekamMobile) elements.tombolRekamMobile.disabled = true;
+    }
+};
+
+let electronRecorder = null;
+
+const initializeElectronRecording = async () => {
+    try {
+        if (window.ElectronRecorder) {
+            electronRecorder = new window.ElectronRecorder();
+            const initialized = await electronRecorder.initialize();
+            
+            if (initialized) {
+                console.log('✅ Electron recorder initialized successfully');
+                elements.statusDiv.textContent = '✅ Microphone ready (basic recording mode)';
+                
+                // Override the start/stop recording functions
+                window.startRecording = startElectronRecording;
+                window.stopRecording = stopElectronRecording;
+            } else {
+                throw new Error('Failed to initialize Electron recorder');
+            }
+        } else {
+            throw new Error('ElectronRecorder not available');
+        }
+    } catch (error) {
+        console.error('❌ Failed to initialize Electron recording:', error);
+        elements.statusDiv.textContent = '❌ Gagal mengakses microphone. Pastikan microphone terhubung dan izin diberikan.';
+    }
+};
+
+const startElectronRecording = () => {
+    if (electronRecorder && electronRecorder.startRecording()) {
+        isRecording = true;
+        updateRecordingUI();
+        elements.statusDiv.textContent = '🎤 Merekam... (mode basic recording)';
+    }
+};
+
+const stopElectronRecording = () => {
+    if (electronRecorder && electronRecorder.stopRecording()) {
+        isRecording = false;
+        updateRecordingUI();
+        elements.statusDiv.textContent = '🛑 Recording stopped';
     }
 };
 
@@ -510,6 +673,9 @@ const pauseRecording = () => {
             recognition.stop();
             pausedTranscript = elements.hasilTeksDiv.innerHTML;
             elements.statusDiv.textContent = '⏸️ Perekaman dijeda...';
+            
+            // Update save button state when paused
+            checkContentAndUpdateButtons();
         } else {
             finalTranscript = '';
             recognition.start();
@@ -527,6 +693,9 @@ const stopRecording = () => {
         recognition.stop();
         elements.statusDiv.textContent = '🛑 Perekaman dihentikan';
         updateRecordingUI();
+        
+        // Update save button state after recording stops
+        checkContentAndUpdateButtons();
     }
 };
 
@@ -933,21 +1102,44 @@ window.deleteNote = async (noteId) => {
         // Show deleting state
         elements.statusDiv.textContent = '🗑️ Menghapus catatan...';
         
-        // Check authentication
-        if (!userId) {
-            throw new Error('Anda harus login untuk menghapus catatan');
-        }
+        // Check if running in development mode (localhost)
+        const forceProductionMode = true; // Set to false to re-enable dev mode
+        const isLocalhost = !forceProductionMode && (
+            window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname === ''
+        );
         
-        // Delete from Firestore
-        await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+        if (isLocalhost && !userId) {
+            // Handle local development deletion
+            console.log('🧪 Development mode: Deleting from localStorage');
+            
+            let localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+            localNotes = localNotes.filter(note => note.id !== noteId);
+            localStorage.setItem('dev-notes', JSON.stringify(localNotes));
+            
+            // Update allNotes and re-render
+            allNotes = localNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            renderTagFilters(allNotes);
+            applyFilters();
+            
+            elements.statusDiv.textContent = '✅ Catatan berhasil dihapus (Mode Development)';
+            
+        } else {
+            // Check authentication for production
+            if (!userId) {
+                throw new Error('Anda harus login untuk menghapus catatan');
+            }
+            
+            // Delete from Firestore
+            await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+            elements.statusDiv.textContent = '✅ Catatan berhasil dihapus';
+        }
         
         // If currently editing this note, clear the editor
         if (editingNoteId === noteId) {
             clearEditor();
         }
-        
-        // Show success message
-        elements.statusDiv.textContent = '✅ Catatan berhasil dihapus';
         
         // Clear status after 3 seconds
         setTimeout(() => {
@@ -1161,6 +1353,21 @@ const setupEventListeners = () => {
         elements.hasilTeksDiv.addEventListener('click', handleLinkClick);
         elements.hasilTeksDiv.addEventListener('dblclick', handleLinkDoubleClick);
         
+        // MutationObserver to watch for programmatic content changes (like speech recognition)
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    checkContentAndUpdateButtons();
+                }
+            });
+        });
+        
+        observer.observe(elements.hasilTeksDiv, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+        
         // Setup checkbox text editing listeners
         setupCheckboxTextListeners();
     }
@@ -1228,6 +1435,32 @@ const setupEventListeners = () => {
 // ================================
 
 const initializeAuth = () => {
+    // Force production mode - disable development mode detection
+    const forceProductionMode = true; // Set to false to re-enable dev mode
+    
+    // Check if running in development mode (localhost)
+    const isLocalhost = !forceProductionMode && (
+        window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' || 
+        window.location.hostname === ''
+    );
+    
+    if (isLocalhost) {
+        console.log('🧪 Development mode detected - using localStorage');
+        
+        // Show app directly in development mode
+        elements.authPageContainer.style.display = 'none';
+        elements.mainContentContainer.style.display = 'flex';
+        
+        // Setup local development notes
+        setupLocalDevNotes();
+        
+        elements.statusDiv.textContent = '🧪 Mode Development - Data disimpan lokal';
+        elements.userEmail.textContent = 'Development Mode';
+        
+        return;
+    }
+    
     onAuthStateChanged(auth, (user) => {
         if (user) {
             userId = user.uid;

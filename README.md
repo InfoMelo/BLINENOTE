@@ -43,6 +43,38 @@
 
 ---
 
+## 💻 **APLIKASI DESKTOP PORTABLE** 
+
+**BLineNote Desktop** adalah versi standalone yang dapat dijalankan tanpa koneksi internet!
+
+### 🎯 **Desktop App Features:**
+- **📦 Portable Executable**: File .exe siap pakai tanpa instalasi
+- **🔒 Offline Operation**: Bekerja sepenuhnya offline tanpa internet
+- **💾 Local Storage**: Data tersimpan lokal, aman dan private
+- **🎤 Voice-to-Text**: Full support recording dan speech recognition
+- **⚡ Fast Performance**: Electron-based, responsive dan cepat
+
+### 📂 **Lokasi Desktop App:**
+Desktop app telah **dipisahkan** dari web app dan tersedia di:
+```
+📁 D:\BLINENOTE-DESKTOP\
+   └── 📄 BLineNote Desktop 1.0.0.exe (81MB)
+```
+
+### 🚀 **Menjalankan Desktop App:**
+```bash
+# Option 1: Double-click file exe
+D:\BLINENOTE-DESKTOP\dist\BLineNote Desktop 1.0.0.exe
+
+# Option 2: Command line
+cd D:\BLINENOTE-DESKTOP
+Start-Process ".\dist\BLineNote Desktop 1.0.0.exe"
+```
+
+📖 **Panduan Desktop**: [DESKTOP_APP_GUIDE.md](DESKTOP_APP_GUIDE.md)
+
+---
+
 ## 🚀 **FITUR UTAMA APLIKASI**
 
 ### 🎤 **Voice Recording**
