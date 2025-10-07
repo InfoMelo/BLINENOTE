@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ================================
    BLineNote - Aplikasi Catatan Suara AI
    Stylesheet Utama

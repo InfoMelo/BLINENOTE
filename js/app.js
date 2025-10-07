@@ -42,6 +42,46 @@ const auth = getAuth(app);
     }
 })();
 
+// Create HTML element for a note
+const createNoteElement = (note) => {
+    if (!note || !note.id) {
+        console.error('❌ Invalid note data:', note);
+        return document.createElement('div'); // Return empty div to prevent errors
+    }
+    const noteDiv = document.createElement('div');
+    noteDiv.className = 'note-card glass-card rounded-lg shadow-lg p-4 mb-4 relative overflow-hidden';
+    
+    // Format date
+    const date = new Date(note.timestamp);
+    const formattedDate = date.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    // Create note content
+    noteDiv.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <div class="flex items-center gap-2">
+                ${note.tag ? `<span class="tag-badge">${note.tag}</span>` : ''}
+                <span class="text-xs text-slate-500">${formattedDate}</span>
+            </div>
+        </div>
+        <div class="note-content prose prose-slate dark:prose-invert">
+            ${note.html}
+        </div>
+        <div class="flex justify-between items-center mt-3 text-xs text-slate-500">
+            <span>${note.wordCount} kata | ${note.characterCount} karakter</span>
+            <button class="text-red-500 hover:text-red-600" onclick="deleteNote('${note.id}')">Hapus</button>
+        </div>
+    `;
+    
+    return noteDiv;
+};
+
 // ================================
 // Global State Variables
 // ================================
@@ -194,28 +234,7 @@ const saveNote = async () => {
         }
         
         if (!userId) {
-            // Demo mode: save to localStorage instead of Firebase
-            console.log('📱 Demo mode: saving to localStorage (user not logged in)');
-            
-            const demoData = {
-                text: textContent,
-                html: htmlContent,
-                tag: tagContent || '',
-                timestamp: new Date().toISOString(),
-                wordCount: textContent.split(/\s+/).filter(word => word.length > 0).length,
-                characterCount: textContent.length,
-                isDemo: true
-            };
-            
-            // Save to localStorage
-            const savedNotes = JSON.parse(localStorage.getItem('blinenoteDemoNotes') || '[]');
-            savedNotes.unshift(demoData);
-            localStorage.setItem('blinenoteDemoNotes', JSON.stringify(savedNotes));
-            
-            elements.statusDiv.textContent = '✅ Catatan disimpan dalam mode demo! (Login untuk simpan permanent)';
-            clearEditor();
-            
-            console.log('✅ Demo save completed');
+            elements.statusDiv.textContent = '❌ Silakan login terlebih dahulu';
             return;
         }
         
@@ -1153,21 +1172,7 @@ const setupEventListeners = () => {
     if (elements.authToggleBtn) elements.authToggleBtn.addEventListener('click', toggleAuthMode);
     if (elements.authToggleBtn2) elements.authToggleBtn2.addEventListener('click', toggleAuthMode);
     
-    // Demo mode button
-    const demoModeBtn = document.getElementById('demo-mode-btn');
-    if (demoModeBtn) {
-        demoModeBtn.addEventListener('click', () => {
-            console.log('🚀 Demo mode activated');
-            // Hide auth page, show main app
-            elements.authPageContainer.style.display = 'none';
-            elements.mainContentContainer.style.display = 'flex';
-            elements.statusDiv.textContent = '🚀 Mode Demo Aktif - Data disimpan lokal saja';
-            
-            // Set demo user indicator
-            elements.userEmail.textContent = 'Mode Demo';
-            console.log('✅ Demo mode ready');
-        });
-    }
+
     
     // Form submission prevention
     const loginForm = document.getElementById('login-form');
@@ -1274,6 +1279,9 @@ const initializeAuth = () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 BLineNote Application Starting...');
+    
+    // Clean up any remaining demo data
+    localStorage.removeItem('blinenoteDemoNotes');
     
     // Initialize all components
     initializeAuth();
