@@ -1,0 +1,25 @@
+/* Image styling for editor and note detail */
+#hasil-teks img.note-image,
+#detail-content img.note-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+}
+
+#hasil-teks figure.note-figure,
+#detail-content figure.note-figure {
+    margin: 0.5rem 0;
+}
+
+#hasil-teks figcaption.note-caption,
+#detail-content figcaption.note-caption {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+.dark #hasil-teks figcaption.note-caption,
+.dark #detail-content figcaption.note-caption {
+    color: #94a3b8;
+}

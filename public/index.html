@@ -33,10 +33,15 @@
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/custom.css">
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
     <!-- Background Gradient -->
     <div class="fixed inset-0 -z-10 h-full w-full bg-gradient-to-br from-indigo-50 via-white to-sky-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900"></div>
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div id="status-div" class="mb-4 text-center text-red-500 text-sm h-5"></div>
+    </div>
 
     <!-- Halaman Otentikasi (Tampilan Awal) -->
     <div id="auth-page-container" class="min-h-screen flex items-center justify-center p-4">
@@ -48,8 +53,6 @@
                 <h1 class="text-3xl font-bold text-slate-900 dark:text-white">BLineNote</h1>
                 <p class="text-slate-600 dark:text-slate-400 mt-2">Masuk untuk melanjutkan</p>
             </div>
-            <div id="status-div" class="mb-4 text-center text-red-500 text-sm h-5"></div>
-            
             <!-- Form Login -->
             <div id="login-section">
                 <form id="login-form" class="space-y-4">
@@ -84,6 +87,16 @@
                     <div>
                         <label for="password-daftar" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
                         <input type="password" id="password-daftar" required class="w-full mt-1 p-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <!-- Password Strength Indicator -->
+                        <div id="password-strength" class="mt-2 hidden">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                    <div id="password-strength-bar" class="h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <span id="password-strength-text" class="text-xs"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Gunakan 8+ karakter dengan kombinasi huruf, angka, dan simbol</p>
+                        </div>
                     </div>
                     <div class="flex items-center justify-center pt-4">
                         <button type="submit" id="tombol-submit-daftar" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 w-full">Daftar</button>
@@ -134,6 +147,9 @@
                             <button type="button" onclick="formatCommand('underline')" title="Underline" class="toolbar-btn">
                                 <i class="fas fa-underline"></i>
                             </button>
+                            <button type="button" id="highlight-btn" onclick="toggleHighlight()" title="Highlight" class="toolbar-btn">
+                                <i class="fas fa-highlighter"></i>
+                            </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
                             <button type="button" onclick="formatCommand('justifyLeft')" title="Align Left" class="toolbar-btn">
                                 <i class="fas fa-align-left"></i>
@@ -161,6 +177,9 @@
                             <button type="button" onclick="removeLink()" title="Remove Link" class="toolbar-btn">
                                 <i class="fas fa-unlink"></i>
                             </button>
+                            <button type="button" id="image-upload-btn" title="Upload Gambar" class="toolbar-btn hidden">
+                                <i class="fas fa-image"></i>
+                            </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
                             <button type="button" onclick="insertLineBreak()" title="Line Break" class="toolbar-btn">
                                 <i class="fas fa-level-down-alt"></i>
@@ -171,6 +190,41 @@
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
                             <button type="button" id="auto-url-toggle" onclick="toggleAutoURLDetection()" title="Auto URL Detection" class="toolbar-btn auto-url-enabled">
                                 <i class="fas fa-magic"></i>
+                            </button>
+                            <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                            <button type="button" id="backup-btn" title="Backup Catatan" class="toolbar-btn">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button type="button" id="restore-btn" title="Restore Catatan" class="toolbar-btn">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                            <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                            <button type="button" id="export-txt-btn" title="Export ke Plain Text" class="toolbar-btn">
+                                <i class="fas fa-file-alt"></i>
+                            </button>
+                            <button type="button" id="export-pdf-btn" title="Export ke PDF" class="toolbar-btn">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
+                        </div>
+
+                        <input type="file" id="restore-file-input" class="hidden" accept="application/json">
+                        <input type="file" id="image-upload-input" class="hidden" accept="image/*" aria-label="Upload gambar">
+                        
+                        <!-- Quick Templates (Optional) -->
+                        <div class="mb-3 flex items-center gap-2">
+                            <span class="text-xs text-slate-500 dark:text-slate-400">Template Cepat:</span>
+                            <select id="template-selector" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <option value="">-- Pilih Template (Opsional) --</option>
+                                <option value="blank">📄 Kosong (Default)</option>
+                                <option value="meeting">📝 Catatan Rapat</option>
+                                <option value="expense">💰 Catatan Pengeluaran</option>
+                                <option value="study">📚 Catatan Belajar</option>
+                                <option value="daily">📋 Jurnal Harian</option>
+                                <option value="travel">✈️ Catatan Perjalanan</option>
+                                <option value="ideas">💡 Ideas/Brainstorm</option>
+                            </select>
+                            <button id="insert-template-btn" class="text-xs px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                Gunakan Template
                             </button>
                         </div>
                         
@@ -210,6 +264,55 @@
                         <input type="search" id="search-input" placeholder="Cari catatan..." class="w-full pl-10 pr-4 py-2 rounded-full border border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow">
                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
+                    
+                    <!-- Quick Filter Buttons -->
+                    <div class="flex flex-col gap-3">
+                        <!-- Date Quick Filters -->
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Periode:</span>
+                            <button id="filter-all" onclick="window.setDateFilter('all')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm">
+                                📋 Semua
+                            </button>
+                            <button id="filter-today" onclick="window.setDateFilter('today')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
+                                📅 Hari Ini
+                            </button>
+                            <button id="filter-week" onclick="window.setDateFilter('week')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
+                                📆 Minggu Ini
+                            </button>
+                            <button id="filter-month" onclick="window.setDateFilter('month')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
+                                🗓️ Bulan Ini
+                            </button>
+                        </div>
+                        
+                        <!-- Sort Options -->
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Urutan:</span>
+                            <button id="sort-newest" onclick="window.setSortOrder('newest')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm">
+                                🔽 Terbaru
+                            </button>
+                            <button id="sort-oldest" onclick="window.setSortOrder('oldest')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
+                                🔼 Terlama
+                            </button>
+                            <button id="sort-alpha" onclick="window.setSortOrder('alphabetical')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
+                                🔤 A-Z
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Active Filters Display -->
+                    <div id="active-filters-container" class="flex flex-wrap gap-2 items-center hidden">
+                        <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Filter Aktif:</span>
+                        <div id="active-filters-badges" class="flex flex-wrap gap-2"></div>
+                        <button id="clear-all-filters" onclick="window.clearAllFilters()" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors">
+                            ✕ Hapus Semua Filter
+                        </button>
+                    </div>
+                    
+                    <!-- Results Counter -->
+                    <div id="results-counter" class="text-sm text-slate-600 dark:text-slate-400 font-medium hidden">
+                        Menampilkan <span id="filtered-count" class="text-indigo-600 dark:text-indigo-400 font-bold">0</span> dari <span id="total-count" class="font-bold">0</span> catatan
+                    </div>
+                    
                     <div id="tag-filters-container" class="flex flex-wrap gap-2"></div>
                     <div class="flex justify-between items-center border-b-2 border-slate-200 dark:border-slate-700 pb-2">
                         <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Daftar Catatan</h2>
@@ -459,12 +562,8 @@
     </div>
     
     <!-- Firebase SDK dan JavaScript Aplikasi -->
-        <!-- Main JavaScript Module -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script type="module" src="js/app.js"></script>
-    
-    <!-- Alternative recorder for Electron -->
-    <script src="js/electron-recorder.js"></script>
-    
 </body>
 </html>
 

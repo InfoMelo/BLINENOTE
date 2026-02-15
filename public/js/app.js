@@ -3,8 +3,9 @@
 // ================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 import { firebaseConfig, APP_CONFIG } from './config.js';
 import { errorHandler } from './errorHandler.js';
@@ -17,6 +18,32 @@ const logger = {
     debug: APP_CONFIG.debug ? console.log.bind(console) : () => {}
 };
 
+// Basic escaping for safe string interpolation in HTML
+const escapeHTML = (value = '') => String(value).replace(/[&<>"']/g, (char) => {
+    const escapeMap = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return escapeMap[char] || char;
+});
+
+// Sanitize HTML content to reduce XSS risk
+const sanitizeHTML = (html = '') => {
+    if (window.DOMPurify) {
+        return window.DOMPurify.sanitize(html, {
+            ADD_TAGS: ['input', 'label', 'img', 'figure', 'figcaption'],
+            ADD_ATTR: ['class', 'id', 'type', 'checked', 'data-checkbox-id', 'data-placeholder', 'contenteditable', 'src', 'alt', 'title', 'width', 'height', 'loading', 'decoding']
+        });
+    }
+
+    const temp = document.createElement('div');
+    temp.textContent = html;
+    return temp.innerHTML;
+};
+
 // ================================
 // Firebase Initialization
 // ================================
@@ -25,6 +52,10 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore with modern cache configuration
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
+
+const MAX_IMAGE_SIZE_MB = 5;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 // Modern cache configuration (replaces deprecated enableIndexedDbPersistence)
 logger.log("✅ Firestore initialized with modern cache configuration.");
@@ -50,15 +81,18 @@ const createNoteElement = (note) => {
     });
 
     // Create note content
+    const safeTag = note.tag ? escapeHTML(note.tag) : '';
+    const safeHtml = sanitizeHTML(note.html || '');
+
     noteDiv.innerHTML = `
         <div class="flex justify-between items-start mb-2">
             <div class="flex items-center gap-2">
-                ${note.tag ? `<span class="tag-badge">${note.tag}</span>` : ''}
+                ${safeTag ? `<span class="tag-badge">${safeTag}</span>` : ''}
                 <span class="text-xs text-slate-500">${formattedDate}</span>
             </div>
         </div>
         <div class="note-content prose prose-slate dark:prose-invert">
-            ${note.html}
+            ${safeHtml}
         </div>
         <div class="flex justify-between items-center mt-3 text-xs text-slate-500">
             <span>${note.wordCount} kata | ${note.characterCount} karakter</span>
@@ -89,6 +123,24 @@ let activeTagFilter = 'all';
 let indonesianVoices = [];
 let selectedVoice = null;
 
+// Auto-save and data protection
+let hasUnsavedChanges = false;
+let autoSaveTimer = null;
+let lastSavedContent = '';
+const AUTO_SAVE_DELAY = 120000; // 120 seconds (2 minutes) - Safe for meetings
+
+// Pagination and performance
+let displayedNotesCount = 20; // Initial load
+const NOTES_PER_PAGE = 20;
+let isLoadingMore = false;
+let currentSortOrder = 'newest'; // newest, oldest, alphabetical
+let activeDateFilter = 'all'; // all, today, week, month, custom
+
+// Scheduled backup
+let autoBackupTimer = null;
+let lastBackupTime = localStorage.getItem('lastBackupTime');
+const AUTO_BACKUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
 // ================================
 // DOM Elements
 // ================================
@@ -105,6 +157,11 @@ const elements = {
     hasilTeksDiv: document.getElementById('hasil-teks'),
     tagInput: document.getElementById('tag-input'),
     statusDiv: document.getElementById('status-div'),
+    backupBtn: document.getElementById('backup-btn'),
+    restoreBtn: document.getElementById('restore-btn'),
+    restoreFileInput: document.getElementById('restore-file-input'),
+    imageUploadBtn: document.getElementById('image-upload-btn'),
+    imageUploadInput: document.getElementById('image-upload-input'),
     
     // Buttons (SAVE BUTTONS REMOVED)
     tombolRekam: document.getElementById('tombol-rekam'),
@@ -154,7 +211,11 @@ const elements = {
     editorView: document.getElementById('editor-view'),
     notesView: document.getElementById('notes-view'),
     editorNavBtn: document.getElementById('editor-nav-btn'),
-    notesNavBtn: document.getElementById('notes-nav-btn')
+    notesNavBtn: document.getElementById('notes-nav-btn'),
+    
+    // Templates
+    templateSelector: document.getElementById('template-selector'),
+    insertTemplateBtn: document.getElementById('insert-template-btn')
 };
 
 // ================================
@@ -173,11 +234,32 @@ const setupNotesListener = (currentUserId) => {
             applyFilters();
         }, (error) => {
             const errorMsg = errorHandler.logError(error, { context: 'notes_listener' });
-            elements.statusDiv.textContent = errorMsg;
+            showStatus(errorMsg, { type: 'error', duration: 5000 });
         });
     } catch (error) {
         const errorMsg = errorHandler.logError(error, { context: 'setup_notes_listener' });
-        elements.statusDiv.textContent = errorMsg;
+        showStatus(errorMsg, { type: 'error', duration: 5000 });
+    }
+};
+
+const setupLocalDevNotes = () => {
+    try {
+        console.log('🧪 Setting up local development notes');
+        
+        // Load notes from localStorage
+        const localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+        allNotes = localNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        renderTagFilters(allNotes);
+        applyFilters();
+        
+        console.log(`📝 Loaded ${allNotes.length} local development notes`);
+        
+    } catch (error) {
+        console.error('❌ Error loading local development notes:', error);
+        allNotes = [];
+        renderTagFilters(allNotes);
+        applyFilters();
     }
 };
 
@@ -188,8 +270,8 @@ const setupNotesListener = (currentUserId) => {
 // Simple save state to prevent double-clicking
 let isSaving = false;
 
-const saveNote = async () => {
-    console.log('🔍 saveNote() called');
+const saveNote = async (isAutoSave = false) => {
+    console.log('🔍 saveNote() called', isAutoSave ? '(AUTO-SAVE)' : '(MANUAL)');
     
     // Prevent double saves
     if (isSaving) {
@@ -203,10 +285,10 @@ const saveNote = async () => {
         
         // Update UI to show saving state
         updateSaveButtonState('saving');
-        elements.statusDiv.textContent = '💾 Menyimpan catatan...';
+        showStatus('💾 Menyimpan catatan...', { type: 'loading' });
         
         // Basic validation - get HTML content directly from editor
-        const htmlContent = elements.hasilTeksDiv.innerHTML.trim();
+        const htmlContent = sanitizeHTML(elements.hasilTeksDiv.innerHTML.trim());
         const textContent = elements.hasilTeksDiv.textContent.trim(); // For word count
         const tagContent = elements.tagInput.value.trim();
         
@@ -220,8 +302,72 @@ const saveNote = async () => {
             throw new Error('Teks tidak boleh kosong');
         }
         
-        if (!userId) {
-            elements.statusDiv.textContent = '❌ Silakan login terlebih dahulu';
+        // Check if running in development mode (localhost)
+        const forceProductionMode = true; // Set to false to re-enable dev mode
+        const isLocalhost = !forceProductionMode && (
+            window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname === ''
+        );
+        
+        // Authentication check - allow localhost testing
+        if (!userId && !isLocalhost) {
+            showStatus('❌ Silakan login terlebih dahulu', { type: 'error', duration: 4000 });
+            return;
+        }
+        
+        // Handle local development testing
+        if (!userId && isLocalhost) {
+            console.log('🧪 Development mode: Using localStorage fallback');
+            
+            const noteData = {
+                id: editingNoteId || Date.now().toString(),
+                text: textContent,
+                html: htmlContent,
+                tag: tagContent || '',
+                wordCount: textContent.split(/\s+/).filter(word => word.length > 0).length,
+                characterCount: textContent.length,
+                timestamp: new Date().toISOString(),
+                userId: 'local-dev-user'
+            };
+            
+            // Get existing notes from localStorage
+            let localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+            
+            if (editingNoteId) {
+                // Update existing note
+                const noteIndex = localNotes.findIndex(note => note.id === editingNoteId);
+                if (noteIndex !== -1) {
+                    localNotes[noteIndex] = { ...localNotes[noteIndex], ...noteData };
+                    showStatus('✅ Catatan berhasil diperbarui! (Mode Development)', { type: 'success', duration: 4000 });
+                } else {
+                    showStatus('❌ Catatan tidak ditemukan untuk diperbarui', { type: 'error', duration: 4000 });
+                    return;
+                }
+            } else {
+                // Add new note
+                localNotes.unshift(noteData);
+                showStatus('✅ Catatan berhasil disimpan! (Mode Development)', { type: 'success', duration: 4000 });
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('dev-notes', JSON.stringify(localNotes));
+            
+            // Clear editor only on manual save
+            if (!isAutoSave) {
+                clearEditor();
+                
+                // Switch to notes view on mobile
+                if (window.innerWidth < 768) {
+                    switchView('notes');
+                }
+            } else {
+                // For auto-save, just update the tracking variables
+                lastSavedContent = htmlContent;
+                hasUnsavedChanges = false;
+            }
+            
+            console.log('✅ Local save completed');
             return;
         }
         
@@ -240,19 +386,25 @@ const saveNote = async () => {
             // Update existing note
             noteData.updatedAt = new Date().toISOString();
             await updateDoc(doc(db, 'users', userId, 'notes', editingNoteId), noteData);
-            elements.statusDiv.textContent = '✅ Catatan berhasil diperbarui!';
+            showStatus('✅ Catatan berhasil diperbarui!', { type: 'success', duration: 4000 });
         } else {
             // Create new note
             await addDoc(collection(db, 'users', userId, 'notes'), noteData);
-            elements.statusDiv.textContent = '✅ Catatan berhasil disimpan!';
+            showStatus('✅ Catatan berhasil disimpan!', { type: 'success', duration: 4000 });
         }
         
-        // Clear editor after successful save
-        clearEditor();
-        
-        // Switch to notes view on mobile
-        if (window.innerWidth < 768) {
-            switchView('notes');
+        // Clear editor only on manual save, NOT on auto-save
+        if (!isAutoSave) {
+            clearEditor();
+            
+            // Switch to notes view on mobile
+            if (window.innerWidth < 768) {
+                switchView('notes');
+            }
+        } else {
+            // For auto-save, just update the tracking variables without clearing
+            lastSavedContent = htmlContent;
+            hasUnsavedChanges = false;
         }
         
         console.log('✅ Save completed successfully');
@@ -274,18 +426,11 @@ const saveNote = async () => {
             errorMessage += 'Coba lagi nanti.';
         }
         
-        elements.statusDiv.textContent = errorMessage;
+        showStatus(errorMessage, { type: 'error', duration: 5000 });
         
     } finally {
         isSaving = false;
         updateSaveButtonState('ready');
-        
-        // Clear status after 3 seconds
-        setTimeout(() => {
-            if (elements.statusDiv.textContent.includes('✅') || elements.statusDiv.textContent.includes('❌')) {
-                elements.statusDiv.textContent = '';
-            }
-        }, 3000);
     }
 };
 
@@ -293,6 +438,14 @@ const clearEditor = () => {
     // Clear content
     elements.hasilTeksDiv.textContent = '';
     elements.tagInput.value = '';
+    
+    // Reset auto-save state
+    hasUnsavedChanges = false;
+    lastSavedContent = '';
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+    }
     
     // Reset states
     editingNoteId = null;
@@ -306,11 +459,6 @@ const clearEditor = () => {
     
     // Update button states
     updateSaveButtonState('disabled');
-    
-    // Clear any editing status
-    if (elements.statusDiv.textContent.includes('Mode edit')) {
-        elements.statusDiv.textContent = '';
-    }
     
     console.log('🧹 Editor cleared');
 };
@@ -353,12 +501,376 @@ const updateSaveButtonState = (state) => {
     });
 };
 
+// ================================
+// Auto-Save System
+// ================================
+
+const scheduleAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+    }
+    
+    // Schedule auto-save
+    autoSaveTimer = setTimeout(() => {
+        if (hasUnsavedChanges && elements.hasilTeksDiv.textContent.trim()) {
+            console.log('⏰ Auto-saving...');
+            autoSave();
+        }
+    }, AUTO_SAVE_DELAY);
+};
+
+const autoSave = async () => {
+    // Don't auto-save if already saving or no changes
+    if (isSaving || !hasUnsavedChanges) return;
+    
+    const currentContent = elements.hasilTeksDiv.innerHTML.trim();
+    
+    // Don't save if content hasn't changed
+    if (currentContent === lastSavedContent) {
+        hasUnsavedChanges = false;
+        return;
+    }
+    
+    // Don't save empty content
+    if (!elements.hasilTeksDiv.textContent.trim()) return;
+    
+    try {
+        console.log('💾 Auto-save triggered - saving in background without clearing editor');
+        await saveNote(true); // Pass true to indicate auto-save
+        showStatus('💾 Auto-saved (2 menit)', { type: 'success', duration: 2000 });
+    } catch (error) {
+        console.error('❌ Auto-save failed:', error);
+        // Don't show error for auto-save, just log it
+    }
+};
+
+const trackContentChanges = () => {
+    const currentContent = elements.hasilTeksDiv.innerHTML.trim();
+    if (currentContent !== lastSavedContent && currentContent) {
+        hasUnsavedChanges = true;
+        scheduleAutoSave();
+    }
+};
+
+// Before unload warning
+const handleBeforeUnload = (e) => {
+    if (hasUnsavedChanges && elements.hasilTeksDiv.textContent.trim()) {
+        e.preventDefault();
+        e.returnValue = 'Anda memiliki perubahan yang belum disimpan. Yakin ingin menutup halaman?';
+        return e.returnValue;
+    }
+};
+
+// Keyboard shortcuts
+const handleKeyboardShortcuts = (e) => {
+    // Ctrl+S or Cmd+S for save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (elements.hasilTeksDiv.textContent.trim()) {
+            saveNote();
+        }
+    }
+    
+    // Ctrl+Z or Cmd+Z for undo (browser default, but ensure it works)
+    // Ctrl+Y or Cmd+Y for redo (browser default, but ensure it works)
+    // These are handled by browser's contenteditable, but we keep the handler for future custom undo/redo
+};
+
 // Enable save buttons when there's content
 const checkContentAndUpdateButtons = () => {
     const content = elements.hasilTeksDiv.textContent.trim();
     const hasContent = content.length > 0;
     updateSaveButtonState(hasContent ? 'ready' : 'disabled');
 };
+
+// ================================
+// Template System
+// ================================
+
+const TEMPLATES = {
+    blank: {
+        name: 'Kosong',
+        content: '',
+        tag: ''
+    },
+    meeting: {
+        name: 'Catatan Rapat',
+        content: `<p><strong>📝 Catatan Rapat</strong></p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p><strong>Topik:</strong> [Isi topik rapat]</p>
+<p><strong>Peserta:</strong> [Nama peserta]</p>
+<p>&nbsp;</p>
+<p><strong>Agenda:</strong></p>
+<ul>
+<li>[Item agenda 1]</li>
+<li>[Item agenda 2]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Keputusan:</strong></p>
+<ul>
+<li>[Keputusan 1]</li>
+<li>[Keputusan 2]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Action Items:</strong></p>
+<ul>
+<li>[ ] [Task 1] - PIC: [Nama]</li>
+<li>[ ] [Task 2] - PIC: [Nama]</li>
+</ul>`,
+        tag: 'Rapat'
+    },
+    expense: {
+        name: 'Catatan Pengeluaran',
+        content: `<p><strong>💰 Catatan Pengeluaran</strong></p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p><strong>Kategori:</strong> [Makanan/Transport/Belanja/Lainnya]</p>
+<p>&nbsp;</p>
+<p><strong>Daftar Pengeluaran:</strong></p>
+<ul>
+<li>[Item] - Rp [Jumlah]</li>
+<li>[Item] - Rp [Jumlah]</li>
+<li>[Item] - Rp [Jumlah]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Total:</strong> Rp [Total]</p>
+<p><strong>Catatan:</strong> [Catatan tambahan jika ada]</p>`,
+        tag: 'Keuangan'
+    },
+    study: {
+        name: 'Catatan Belajar',
+        content: `<p><strong>📚 Catatan Belajar</strong></p>
+<p><strong>Mata Pelajaran/Topik:</strong> [Isi topik]</p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p>&nbsp;</p>
+<p><strong>Konsep Utama:</strong></p>
+<ul>
+<li>[Konsep 1]</li>
+<li>[Konsep 2]</li>
+<li>[Konsep 3]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Penjelasan Detail:</strong></p>
+<p>[Tuliskan penjelasan detail di sini...]</p>
+<p>&nbsp;</p>
+<p><strong>Contoh/Latihan:</strong></p>
+<p>[Contoh soal atau latihan]</p>
+<p>&nbsp;</p>
+<p><strong>Pertanyaan/Yang Belum Dipahami:</strong></p>
+<ul>
+<li>[Pertanyaan 1]</li>
+<li>[Pertanyaan 2]</li>
+</ul>`,
+        tag: 'Belajar'
+    },
+    daily: {
+        name: 'Jurnal Harian',
+        content: `<p><strong>📋 Jurnal Harian</strong></p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p>&nbsp;</p>
+<p><strong>Mood Hari Ini:</strong> [😊 😐 😔 😤 🥳]</p>
+<p>&nbsp;</p>
+<p><strong>Yang Saya Lakukan Hari Ini:</strong></p>
+<ul>
+<li>[Aktivitas 1]</li>
+<li>[Aktivitas 2]</li>
+<li>[Aktivitas 3]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Hal yang Disyukuri:</strong></p>
+<ul>
+<li>[Hal 1]</li>
+<li>[Hal 2]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Refleksi & Catatan:</strong></p>
+<p>[Tuliskan refleksi atau catatan penting hari ini...]</p>`,
+        tag: 'Jurnal'
+    },
+    travel: {
+        name: 'Catatan Perjalanan',
+        content: `<p><strong>✈️ Catatan Perjalanan</strong></p>
+<p><strong>Tujuan:</strong> [Nama kota/tempat]</p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p>&nbsp;</p>
+<p><strong>Itinerary/Jadwal:</strong></p>
+<ul>
+<li><strong>Pagi:</strong> [Aktivitas pagi]</li>
+<li><strong>Siang:</strong> [Aktivitas siang]</li>
+<li><strong>Malam:</strong> [Aktivitas malam]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Tempat yang Dikunjungi:</strong></p>
+<ul>
+<li>[Tempat 1] - [Kesan singkat]</li>
+<li>[Tempat 2] - [Kesan singkat]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Pengalaman Menarik:</strong></p>
+<p>[Ceritakan pengalaman menarik selama perjalanan...]</p>
+<p>&nbsp;</p>
+<p><strong>Tips/Catatan Penting:</strong></p>
+<ul>
+<li>[Tips 1]</li>
+<li>[Tips 2]</li>
+</ul>`,
+        tag: 'Travel'
+    },
+    ideas: {
+        name: 'Ideas/Brainstorm',
+        content: `<p><strong>💡 Ideas & Brainstorming</strong></p>
+<p><strong>Topik:</strong> [Isi topik ide]</p>
+<p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+<p>&nbsp;</p>
+<p><strong>Latar Belakang/Masalah:</strong></p>
+<p>[Jelaskan konteks atau masalah yang ingin diselesaikan...]</p>
+<p>&nbsp;</p>
+<p><strong>Ideas/Solusi:</strong></p>
+<ul>
+<li>💡 [Ide 1]</li>
+<li>💡 [Ide 2]</li>
+<li>💡 [Ide 3]</li>
+<li>💡 [Ide 4]</li>
+</ul>
+<p>&nbsp;</p>
+<p><strong>Ide Terbaik (Prioritas):</strong></p>
+<p>[Pilih ide yang paling menjanjikan dan jelaskan alasannya...]</p>
+<p>&nbsp;</p>
+<p><strong>Next Steps:</strong></p>
+<ul>
+<li>[ ] [Langkah 1]</li>
+<li>[ ] [Langkah 2]</li>
+<li>[ ] [Langkah 3]</li>
+</ul>`,
+        tag: 'Ideas'
+    }
+};
+
+// Insert selected template into editor
+const insertTemplate = (templateKey) => {
+    const template = TEMPLATES[templateKey];
+    if (!template) return;
+    
+    // If blank, just clear editor
+    if (templateKey === 'blank') {
+        elements.hasilTeksDiv.innerHTML = '';
+        elements.hasilTeksDiv.focus();
+        return;
+    }
+    
+    // Check if editor has content
+    const currentContent = elements.hasilTeksDiv.textContent.trim();
+    if (currentContent) {
+        const confirm = window.confirm(
+            `Editor sudah berisi teks. Gunakan template akan mengganti konten yang ada.\n\nLanjutkan?`
+        );
+        if (!confirm) return;
+    }
+    
+    // Insert template content
+    elements.hasilTeksDiv.innerHTML = template.content;
+    
+    // Auto-fill tag if available
+    if (template.tag && elements.tagInput) {
+        elements.tagInput.value = template.tag;
+    }
+    
+    // Move cursor to first empty field (placeholder text in brackets)
+    moveCursorToFirstEmptyField();
+    
+    // Mark as having unsaved changes
+    hasUnsavedChanges = true;
+    checkContentAndUpdateButtons();
+    scheduleAutoSave();
+    
+    // Reset template selector
+    if (elements.templateSelector) {
+        elements.templateSelector.value = '';
+        if (elements.insertTemplateBtn) {
+            elements.insertTemplateBtn.disabled = true;
+        }
+    }
+};
+
+// Move cursor to first empty field (text in square brackets)
+const moveCursorToFirstEmptyField = () => {
+    const editor = elements.hasilTeksDiv;
+    const content = editor.innerHTML;
+    
+    // Find first occurrence of [text]
+    const match = content.match(/\[([^\]]+)\]/);
+    if (!match) {
+        editor.focus();
+        return;
+    }
+    
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    
+    // Find the text node containing the match
+    const walker = document.createTreeWalker(
+        tempDiv,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+    );
+    
+    let targetNode = null;
+    let targetOffset = 0;
+    
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const index = node.textContent.indexOf(match[0]);
+        if (index !== -1) {
+            targetNode = node;
+            targetOffset = index;
+            break;
+        }
+    }
+    
+    if (targetNode) {
+        // Replace tempDiv content back to editor to maintain node references
+        editor.innerHTML = tempDiv.innerHTML;
+        
+        // Find the corresponding node in the actual editor
+        const editorWalker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        
+        let editorNode = null;
+        while (editorWalker.nextNode()) {
+            const node = editorWalker.currentNode;
+            if (node.textContent === targetNode.textContent) {
+                editorNode = node;
+                break;
+            }
+        }
+        
+        if (editorNode) {
+            // Set selection to highlight the bracketed text
+            const range = document.createRange();
+            range.setStart(editorNode, targetOffset);
+            range.setEnd(editorNode, targetOffset + match[0].length);
+            
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            editor.focus();
+            return;
+        }
+    }
+    
+    // Fallback: just focus the editor
+    editor.focus();
+};
+
+// Expose for onclick handlers
+window.insertTemplate = insertTemplate;
 
 // ================================
 // Mobile View Functions
@@ -480,7 +992,7 @@ const initializeSpeechRecognition = () => {
                 default:
                     errorMessage = `Error pengenalan suara: ${event.error}`;
             }
-            elements.statusDiv.textContent = `❌ ${errorMessage}`;
+            showStatus(`❌ ${errorMessage}`, { type: 'error', duration: 5000 });
             isRecording = false;
             updateRecordingUI();
         };
@@ -502,10 +1014,10 @@ const initializeSpeechRecognition = () => {
         
         window.recognition = recognition;
         console.log('✅ Speech recognition initialized successfully');
-        elements.statusDiv.textContent = '✅ Speech recognition siap digunakan';
+        showStatus('✅ Speech recognition siap digunakan', { type: 'success', duration: 4000 });
     } else {
         console.warn('❌ Speech Recognition API not supported');
-        elements.statusDiv.textContent = '❌ Browser tidak mendukung speech recognition. Gunakan Chrome/Edge untuk fitur ini.';
+        showStatus('❌ Browser tidak mendukung speech recognition. Gunakan Chrome/Edge untuk fitur ini.', { type: 'error', duration: 5000 });
         
         // Disable recording buttons
         if (elements.tombolRekam) elements.tombolRekam.disabled = true;
@@ -523,7 +1035,7 @@ const initializeElectronRecording = async () => {
             
             if (initialized) {
                 console.log('✅ Electron recorder initialized successfully');
-                elements.statusDiv.textContent = '✅ Microphone ready (basic recording mode)';
+                showStatus('✅ Microphone ready (basic recording mode)', { type: 'success', duration: 4000 });
                 
                 // Override the start/stop recording functions
                 window.startRecording = startElectronRecording;
@@ -536,7 +1048,7 @@ const initializeElectronRecording = async () => {
         }
     } catch (error) {
         console.error('❌ Failed to initialize Electron recording:', error);
-        elements.statusDiv.textContent = '❌ Gagal mengakses microphone. Pastikan microphone terhubung dan izin diberikan.';
+        showStatus('❌ Gagal mengakses microphone. Pastikan microphone terhubung dan izin diberikan.', { type: 'error', duration: 5000 });
     }
 };
 
@@ -544,7 +1056,7 @@ const startElectronRecording = () => {
     if (electronRecorder && electronRecorder.startRecording()) {
         isRecording = true;
         updateRecordingUI();
-        elements.statusDiv.textContent = '🎤 Merekam... (mode basic recording)';
+        showStatus('🎤 Merekam... (mode basic recording)', { type: 'loading' });
     }
 };
 
@@ -552,7 +1064,7 @@ const stopElectronRecording = () => {
     if (electronRecorder && electronRecorder.stopRecording()) {
         isRecording = false;
         updateRecordingUI();
-        elements.statusDiv.textContent = '🛑 Recording stopped';
+        showStatus('🛑 Recording stopped', { type: 'info', duration: 3000 });
     }
 };
 
@@ -565,10 +1077,10 @@ const startRecording = () => {
         try {
             isPaused = false;
             recognition.start();
-            elements.statusDiv.textContent = '🎤 Merekam suara...';
+            showStatus('🎤 Merekam suara...', { type: 'loading' });
         } catch (error) {
             console.error('Start recording error:', error);
-            elements.statusDiv.textContent = '❌ Gagal memulai perekaman';
+            showStatus('❌ Gagal memulai perekaman', { type: 'error', duration: 5000 });
         }
     }
 };
@@ -580,14 +1092,14 @@ const pauseRecording = () => {
         if (isPaused) {
             recognition.stop();
             pausedTranscript = elements.hasilTeksDiv.innerHTML;
-            elements.statusDiv.textContent = '⏸️ Perekaman dijeda...';
+            showStatus('⏸️ Perekaman dijeda...', { type: 'warning', duration: 4000 });
             
             // Update save button state when paused
             checkContentAndUpdateButtons();
         } else {
             finalTranscript = '';
             recognition.start();
-            elements.statusDiv.textContent = '🎤 Melanjutkan perekaman...';
+            showStatus('🎤 Melanjutkan perekaman...', { type: 'loading' });
         }
         
         updateRecordingUI();
@@ -599,7 +1111,7 @@ const stopRecording = () => {
         isRecording = false;
         isPaused = false;
         recognition.stop();
-        elements.statusDiv.textContent = '🛑 Perekaman dihentikan';
+        showStatus('🛑 Perekaman dihentikan', { type: 'info', duration: 3000 });
         updateRecordingUI();
         
         // Update save button state after recording stops
@@ -686,10 +1198,7 @@ const resetEditor = () => {
             }
         }
         
-        elements.statusDiv.textContent = '❌ Edit dibatalkan';
-        setTimeout(() => {
-            elements.statusDiv.textContent = '';
-        }, 2000);
+        showStatus('❌ Edit dibatalkan', { type: 'error', duration: 5000 });
     }
     
     // Use the new clearEditor function for consistency
@@ -735,7 +1244,7 @@ const initializeTextToSpeech = () => {
 
 const speakText = (text, noteId = null) => {
     if (!('speechSynthesis' in window)) {
-        elements.statusDiv.textContent = '❌ Browser tidak mendukung text-to-speech';
+        showStatus('❌ Browser tidak mendukung text-to-speech', { type: 'error', duration: 5000 });
         return;
     }
     
@@ -752,7 +1261,7 @@ const speakText = (text, noteId = null) => {
     }
     
     if (text.trim() === '') {
-        elements.statusDiv.textContent = '⚠️ Tidak ada teks untuk dibaca';
+        showStatus('⚠️ Tidak ada teks untuk dibaca', { type: 'warning', duration: 4000 });
         return;
     }
     
@@ -769,20 +1278,19 @@ const speakText = (text, noteId = null) => {
     utterance.onstart = () => {
         currentlySpeakingNoteId = noteId;
         updateSpeakButtonState(noteId, true);
-        elements.statusDiv.textContent = '🔊 Membaca teks...';
+        showStatus('🔊 Membaca teks...', { type: 'loading' });
     };
     
     utterance.onend = () => {
         currentlySpeakingNoteId = null;
         updateSpeakButtonState(noteId, false);
-        elements.statusDiv.textContent = '';
     };
     
     utterance.onerror = (event) => {
         console.error('Speech synthesis error:', event.error);
         currentlySpeakingNoteId = null;
         updateSpeakButtonState(noteId, false);
-        elements.statusDiv.textContent = '❌ Gagal membaca teks';
+        showStatus('❌ Gagal membaca teks', { type: 'error', duration: 5000 });
     };
     
     speechSynthesis.speak(utterance);
@@ -821,7 +1329,7 @@ const updateSpeakButtonState = (noteId, isSpeaking) => {
 // Notes Display Functions
 // ================================
 
-const renderNotes = (notesToRender = allNotes) => {
+const renderNotes = (notesToRender = allNotes, append = false) => {
     const container = elements.catatanContainer;
     
     if (!container) {
@@ -837,20 +1345,26 @@ const renderNotes = (notesToRender = allNotes) => {
                 <p class="text-sm">Mulai merekam untuk membuat catatan pertama Anda</p>
             </div>
         `;
+        displayedNotesCount = 0;
         return;
     }
     
-    container.innerHTML = notesToRender.map(note => {
+    // Pagination: only render a subset
+    const notesToShow = notesToRender.slice(0, displayedNotesCount);
+    
+    const notesHTML = notesToShow.map(note => {
         // Buat preview singkat - maksimal 100 karakter untuk 2 baris
         const fullText = note.html ? note.html.replace(/<[^>]*>/g, '') : note.text;
         const previewText = fullText.substring(0, 100);
         const hasMoreContent = fullText.length > 100;
+        const safePreviewText = escapeHTML(previewText);
+        const safeTag = note.tag ? escapeHTML(note.tag) : '';
         
         return `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-all duration-200" data-note-id="${note.id}">
                 <div class="flex justify-between items-start mb-2">
                     <div class="flex-1">
-                        ${note.tag ? `<span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full mb-2">${note.tag}</span>` : ''}
+                        ${safeTag ? `<span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full mb-2">${safeTag}</span>` : ''}
                     </div>
                     <div class="flex space-x-1 ml-2">
                         <button onclick="window.editNote('${note.id}')" 
@@ -868,7 +1382,7 @@ const renderNotes = (notesToRender = allNotes) => {
                 
                 <!-- Preview ringkas -->
                 <div class="text-gray-800 dark:text-gray-200 mb-3 leading-relaxed text-sm line-clamp-2">
-                    ${previewText}${hasMoreContent ? '...' : ''}
+                    ${safePreviewText}${hasMoreContent ? '...' : ''}
                 </div>
                 
                 <!-- Footer dengan tanggal dan tombol detail -->
@@ -892,6 +1406,49 @@ const renderNotes = (notesToRender = allNotes) => {
             </div>
         `;
     }).join('');
+    
+    if (append) {
+        container.insertAdjacentHTML('beforeend', notesHTML);
+    } else {
+        container.innerHTML = notesHTML;
+    }
+    
+    // Show load more button if there are more notes
+    showLoadMoreButton(notesToRender.length > displayedNotesCount);
+};
+
+// Load more notes (infinite scroll)
+const loadMoreNotes = () => {
+    if (isLoadingMore) return;
+    isLoadingMore = true;
+    
+    displayedNotesCount += NOTES_PER_PAGE;
+    applyFilters();
+    
+    setTimeout(() => {
+        isLoadingMore = false;
+    }, 300);
+};
+
+// Show/hide load more button
+const showLoadMoreButton = (show) => {
+    let loadMoreBtn = document.getElementById('load-more-btn');
+    
+    if (show && !loadMoreBtn) {
+        // Create button if doesn't exist
+        loadMoreBtn = document.createElement('button');
+        loadMoreBtn.id = 'load-more-btn';
+        loadMoreBtn.className = 'w-full py-3 mt-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors';
+        loadMoreBtn.textContent = 'Muat Lebih Banyak';
+        loadMoreBtn.onclick = loadMoreNotes;
+        elements.catatanContainer.insertAdjacentElement('afterend', loadMoreBtn);
+    } else if (!show && loadMoreBtn) {
+        loadMoreBtn.remove();
+    } else if (show && loadMoreBtn) {
+        loadMoreBtn.style.display = 'block';
+    } else if (!show && loadMoreBtn) {
+        loadMoreBtn.style.display = 'none';
+    }
 };
 
 const renderTagFilters = (notes) => {
@@ -909,10 +1466,11 @@ const renderTagFilters = (notes) => {
     
     const tagButtons = tags.map(tag => {
         const count = notes.filter(note => note.tag === tag).length;
+        const safeTag = escapeHTML(tag);
         return `
             <button onclick="window.filterByTag('${tag}')" 
                     class="tag-filter px-3 py-1 rounded-full text-sm transition-colors duration-200 ${activeTagFilter === tag ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">
-                ${tag} (${count})
+                ${safeTag} (${count})
             </button>
         `;
     }).join('');
@@ -932,6 +1490,28 @@ const applyFilters = () => {
         filteredNotes = filteredNotes.filter(note => note.tag === activeTagFilter);
     }
     
+    // Filter by date
+    if (activeDateFilter !== 'all') {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        filteredNotes = filteredNotes.filter(note => {
+            const noteDate = new Date(note.timestamp || note.updatedAt);
+            switch (activeDateFilter) {
+                case 'today':
+                    return noteDate >= startOfToday;
+                case 'week':
+                    return noteDate >= startOfWeek;
+                case 'month':
+                    return noteDate >= startOfMonth;
+                default:
+                    return true;
+            }
+        });
+    }
+    
     // Filter by search
     const searchTerm = elements.searchInput?.value.toLowerCase().trim();
     if (searchTerm) {
@@ -941,7 +1521,851 @@ const applyFilters = () => {
         );
     }
     
+    // Sort notes
+    filteredNotes = sortNotes(filteredNotes, currentSortOrder);
+    
+    // Reset pagination on new filter
+    displayedNotesCount = NOTES_PER_PAGE;
+    
+    // Update UI indicators
+    updateFilterUI();
+    updateResultsCounter(filteredNotes.length, allNotes.length);
+    
     renderNotes(filteredNotes);
+};
+
+// Update filter UI to show active state
+const updateFilterUI = () => {
+    // Update date filter buttons
+    const dateButtons = {
+        'all': document.getElementById('filter-all'),
+        'today': document.getElementById('filter-today'),
+        'week': document.getElementById('filter-week'),
+        'month': document.getElementById('filter-month')
+    };
+    
+    Object.keys(dateButtons).forEach(key => {
+        const btn = dateButtons[key];
+        if (btn) {
+            if (activeDateFilter === key) {
+                btn.className = 'quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm';
+            } else {
+                btn.className = 'quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600';
+            }
+        }
+    });
+    
+    // Update sort buttons
+    const sortButtons = {
+        'newest': document.getElementById('sort-newest'),
+        'oldest': document.getElementById('sort-oldest'),
+        'alphabetical': document.getElementById('sort-alpha')
+    };
+    
+    Object.keys(sortButtons).forEach(key => {
+        const btn = sortButtons[key];
+        if (btn) {
+            if (currentSortOrder === key) {
+                btn.className = 'quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm';
+            } else {
+                btn.className = 'quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600';
+            }
+        }
+    });
+    
+    // Update active filters badges
+    updateActiveFiltersBadges();
+};
+
+// Show active filters as removable badges
+const updateActiveFiltersBadges = () => {
+    const container = document.getElementById('active-filters-container');
+    const badgesContainer = document.getElementById('active-filters-badges');
+    
+    if (!container || !badgesContainer) return;
+    
+    const badges = [];
+    const searchTerm = elements.searchInput?.value.toLowerCase().trim();
+    
+    // Check if any non-default filters are active
+    const hasActiveFilters = 
+        activeDateFilter !== 'all' || 
+        currentSortOrder !== 'newest' || 
+        activeTagFilter !== 'all' || 
+        searchTerm;
+    
+    if (!hasActiveFilters) {
+        container.classList.add('hidden');
+        return;
+    }
+    
+    container.classList.remove('hidden');
+    
+    // Date filter badge
+    if (activeDateFilter !== 'all') {
+        const dateLabels = {
+            'today': '📅 Hari Ini',
+            'week': '📆 Minggu Ini',
+            'month': '🗓️ Bulan Ini'
+        };
+        badges.push(`
+            <span class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-full">
+                ${dateLabels[activeDateFilter]}
+                <button onclick="window.setDateFilter('all')" class="hover:text-indigo-900 dark:hover:text-indigo-100 transition-colors">
+                    ✕
+                </button>
+            </span>
+        `);
+    }
+    
+    // Sort filter badge
+    if (currentSortOrder !== 'newest') {
+        const sortLabels = {
+            'oldest': '🔼 Terlama',
+            'alphabetical': '🔤 A-Z'
+        };
+        badges.push(`
+            <span class="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full">
+                ${sortLabels[currentSortOrder]}
+                <button onclick="window.setSortOrder('newest')" class="hover:text-purple-900 dark:hover:text-purple-100 transition-colors">
+                    ✕
+                </button>
+            </span>
+        `);
+    }
+    
+    // Tag filter badge
+    if (activeTagFilter !== 'all') {
+        badges.push(`
+            <span class="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
+                🏷️ ${escapeHTML(activeTagFilter)}
+                <button onclick="window.filterByTag('all')" class="hover:text-blue-900 dark:hover:text-blue-100 transition-colors">
+                    ✕
+                </button>
+            </span>
+        `);
+    }
+    
+    // Search filter badge
+    if (searchTerm) {
+        badges.push(`
+            <span class="inline-flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs font-medium rounded-full">
+                🔍 "${escapeHTML(searchTerm)}"
+                <button onclick="window.clearSearch()" class="hover:text-green-900 dark:hover:text-green-100 transition-colors">
+                    ✕
+                </button>
+            </span>
+        `);
+    }
+    
+    badgesContainer.innerHTML = badges.join('');
+};
+
+// Update results counter
+const updateResultsCounter = (filteredCount, totalCount) => {
+    const counter = document.getElementById('results-counter');
+    const filteredSpan = document.getElementById('filtered-count');
+    const totalSpan = document.getElementById('total-count');
+    
+    if (!counter || !filteredSpan || !totalSpan) return;
+    
+    filteredSpan.textContent = filteredCount;
+    totalSpan.textContent = totalCount;
+    
+    // Show counter when filtering is active
+    if (filteredCount < totalCount) {
+        counter.classList.remove('hidden');
+    } else {
+        counter.classList.add('hidden');
+    }
+};
+
+// Global functions for filter controls
+window.setDateFilter = (filter) => {
+    activeDateFilter = filter;
+    applyFilters();
+};
+
+window.setSortOrder = (order) => {
+    currentSortOrder = order;
+    applyFilters();
+};
+
+window.clearSearch = () => {
+    if (elements.searchInput) {
+        elements.searchInput.value = '';
+        applyFilters();
+    }
+};
+
+window.clearAllFilters = () => {
+    // Reset all filters to defaults
+    activeDateFilter = 'all';
+    currentSortOrder = 'newest';
+    activeTagFilter = 'all';
+    if (elements.searchInput) {
+        elements.searchInput.value = '';
+    }
+    
+    // Reapply filters
+    applyFilters();
+    
+    // Show confirmation
+    showStatus('✅ Semua filter telah direset', { type: 'success', duration: 3000 });
+};
+
+// Sort notes by different criteria
+const sortNotes = (notes, order) => {
+    const sorted = [...notes];
+    
+    switch (order) {
+        case 'oldest':
+            return sorted.sort((a, b) => {
+                const dateA = new Date(a.timestamp || a.updatedAt);
+                const dateB = new Date(b.timestamp || b.updatedAt);
+                return dateA - dateB;
+            });
+        case 'alphabetical':
+            return sorted.sort((a, b) => {
+                const textA = (a.text || '').toLowerCase();
+                const textB = (b.text || '').toLowerCase();
+                return textA.localeCompare(textB);
+            });
+        case 'newest':
+        default:
+            return sorted.sort((a, b) => {
+                const dateA = new Date(a.timestamp || a.updatedAt);
+                const dateB = new Date(b.timestamp || b.updatedAt);
+                return dateB - dateA;
+            });
+    }
+};
+
+// ================================
+// Backup and Restore Functions
+// ================================
+
+let statusTimeout = null;
+
+const showStatus = (message, { type = 'info', duration = 0 } = {}) => {
+    if (!elements.statusDiv) return;
+    if (statusTimeout) {
+        clearTimeout(statusTimeout);
+        statusTimeout = null;
+    }
+    // Reset classes
+    elements.statusDiv.className = 'mb-4 text-center text-sm h-5 transition-opacity duration-300';
+    switch (type) {
+        case 'success':
+            elements.statusDiv.classList.add('text-green-500');
+            break;
+        case 'error':
+            elements.statusDiv.classList.add('text-red-500', 'font-semibold');
+            break;
+        case 'warning':
+            elements.statusDiv.classList.add('text-yellow-500');
+            break;
+        case 'loading':
+            elements.statusDiv.classList.add('text-blue-400', 'animate-pulse');
+            break;
+        default:
+            elements.statusDiv.classList.add('text-gray-400');
+    }
+    elements.statusDiv.textContent = message;
+    elements.statusDiv.style.opacity = '1';
+    if (duration > 0) {
+        statusTimeout = setTimeout(() => {
+            elements.statusDiv.style.opacity = '0';
+            setTimeout(() => {
+                if (elements.statusDiv.style.opacity === '0') {
+                    elements.statusDiv.textContent = '';
+                    elements.statusDiv.style.opacity = '1';
+                }
+            }, 300);
+        }, duration);
+    }
+};
+
+const getDecryptErrorMessage = (error) => {
+    if (!error) return 'Password salah atau data backup rusak.';
+    if (error.name === 'OperationError' || error.name === 'DataError') {
+        return 'Password salah atau data backup rusak.';
+    }
+    return error.message || 'Password salah atau data backup rusak.';
+};
+
+const setBackupRestoreButtons = (disabled) => {
+    if (elements.backupBtn) {
+        elements.backupBtn.disabled = disabled;
+        elements.backupBtn.style.opacity = disabled ? '0.5' : '1';
+        elements.backupBtn.style.pointerEvents = disabled ? 'none' : 'auto';
+    }
+    if (elements.restoreBtn) {
+        elements.restoreBtn.disabled = disabled;
+        elements.restoreBtn.style.opacity = disabled ? '0.5' : '1';
+        elements.restoreBtn.style.pointerEvents = disabled ? 'none' : 'auto';
+    }
+};
+
+const stripHTML = (html = '') => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return temp.textContent || '';
+};
+
+const bytesToBase64 = (bytes) => {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+};
+
+const base64ToBytes = (base64) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+};
+
+const deriveEncryptionKey = async (password, salt, iterations = 100000) => {
+    const encoder = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+    );
+
+    return window.crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt,
+            iterations,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+};
+
+const encryptData = async (dataObject, password) => {
+    if (!window.crypto?.subtle) {
+        throw new Error('Browser tidak mendukung enkripsi');
+    }
+
+    const encoder = new TextEncoder();
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveEncryptionKey(password, salt);
+    const plaintext = encoder.encode(JSON.stringify(dataObject));
+    const ciphertext = await window.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        plaintext
+    );
+
+    return JSON.stringify({
+        salt: bytesToBase64(salt),
+        iv: bytesToBase64(iv),
+        ciphertext: bytesToBase64(new Uint8Array(ciphertext))
+    });
+};
+
+const decryptData = async (encryptedJson, password) => {
+    if (!window.crypto?.subtle) {
+        throw new Error('Browser tidak mendukung dekripsi');
+    }
+
+    const { salt, iv, ciphertext } = JSON.parse(encryptedJson);
+    if (!salt || !iv || !ciphertext) {
+        throw new Error('Struktur enkripsi tidak valid');
+    }
+
+    const saltBytes = base64ToBytes(salt);
+    const ivBytes = base64ToBytes(iv);
+    const dataBytes = base64ToBytes(ciphertext);
+    const key = await deriveEncryptionKey(password, saltBytes);
+    const plaintext = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: ivBytes },
+        key,
+        dataBytes
+    );
+
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(plaintext));
+};
+
+const promptPasswordForBackup = () => {
+    const password = prompt('Masukkan password untuk enkripsi backup (minimal 8 karakter):');
+    if (!password) return null;
+    if (password.length < 8) {
+        alert('Password minimal 8 karakter.');
+        return null;
+    }
+    const confirmPassword = prompt('Ulangi password untuk konfirmasi:');
+    if (confirmPassword !== password) {
+        alert('Konfirmasi password tidak cocok.');
+        return null;
+    }
+    return password;
+};
+
+const promptPasswordForRestore = () => {
+    const password = prompt('Masukkan password untuk membuka backup:');
+    if (!password) return null;
+    if (password.length < 8) {
+        alert('Password minimal 8 karakter.');
+        return null;
+    }
+    return password;
+};
+
+const buildBackupPayload = () => {
+    return {
+        app: APP_CONFIG.name,
+        version: APP_CONFIG.version,
+        exportedAt: new Date().toISOString(),
+        notes: allNotes.map(note => ({
+            id: note.id || null,
+            text: note.text || stripHTML(note.html || ''),
+            html: sanitizeHTML(note.html || ''),
+            tag: note.tag || '',
+            wordCount: note.wordCount || 0,
+            characterCount: note.characterCount || 0,
+            timestamp: note.timestamp || null,
+            updatedAt: note.updatedAt || null
+        }))
+    };
+};
+
+const downloadJson = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const downloadText = (text, filename) => {
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const handleBackup = async () => {
+    if (!userId) {
+        showStatus('🔐 Silakan login untuk melakukan backup.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    if (!allNotes.length) {
+        showStatus('⚠️ Tidak ada catatan untuk dibackup.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    const password = promptPasswordForBackup();
+    if (!password) {
+        showStatus('⚠️ Backup dibatalkan.', { type: 'warning', duration: 3000 });
+        return;
+    }
+
+    setBackupRestoreButtons(true);
+    try {
+        showStatus('🔐 Mengenkripsi backup...', { type: 'loading' });
+        const payload = buildBackupPayload();
+        const encryptedJson = await encryptData(payload, password);
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const safeEmail = (elements.userEmail?.textContent || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filename = `blinenote-backup-${safeEmail}-${dateStamp}.json`;
+        downloadText(encryptedJson, filename);
+        showStatus(`✅ Backup berhasil! ${allNotes.length} catatan terenkripsi → ${filename}`, { type: 'success', duration: 6000 });
+    } catch (error) {
+        showStatus(`❌ Backup gagal: ${error.message}`, { type: 'error', duration: 8000 });
+    } finally {
+        setBackupRestoreButtons(false);
+    }
+};
+
+// Export notes to plain text
+const exportToPlainText = () => {
+    if (!userId) {
+        showStatus('🔐 Silakan login untuk export catatan.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    if (!allNotes.length) {
+        showStatus('⚠️ Tidak ada catatan untuk di-export.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    try {
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const safeEmail = (elements.userEmail?.textContent || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
+        
+        let textContent = `BLINENOTE - CATATAN SAYA\n`;
+        textContent += `=================================\n`;
+        textContent += `Exported: ${new Date().toLocaleString('id-ID')}\n`;
+        textContent += `Total: ${allNotes.length} catatan\n\n`;
+        
+        allNotes.forEach((note, index) => {
+            const text = note.text || stripHTML(note.html || '');
+            const date = note.timestamp ? new Date(note.timestamp).toLocaleString('id-ID') : 'Tanggal tidak tersedia';
+            const tag = note.tag || 'Tanpa Tag';
+            
+            textContent += `\n--- CATATAN ${index + 1} ---\n`;
+            textContent += `Tanggal: ${date}\n`;
+            textContent += `Tag: ${tag}\n`;
+            textContent += `\n${text}\n`;
+            textContent += `\n${'='.repeat(50)}\n`;
+        });
+        
+        const filename = `blinenote-export-${safeEmail}-${dateStamp}.txt`;
+        downloadText(textContent, filename);
+        showStatus(`✅ Export berhasil! ${allNotes.length} catatan → ${filename}`, { type: 'success', duration: 6000 });
+    } catch (error) {
+        showStatus(`❌ Export gagal: ${error.message}`, { type: 'error', duration: 8000 });
+    }
+};
+
+// Export notes to PDF using browser print
+const exportToPDF = () => {
+    if (!userId) {
+        showStatus('🔐 Silakan login untuk export catatan.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    if (!allNotes.length) {
+        showStatus('⚠️ Tidak ada catatan untuk di-export.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    try {
+        // Create a print-friendly HTML
+        const dateStamp = new Date().toLocaleString('id-ID');
+        let htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>BLineNote - Export PDF</title>
+                <style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+                    h1 { color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 10px; }
+                    .meta { color: #666; font-size: 14px; margin-bottom: 30px; }
+                    .note { margin-bottom: 40px; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; page-break-inside: avoid; }
+                    .note-header { display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+                    .note-date { color: #64748b; font-size: 13px; }
+                    .note-tag { background: #4f46e5; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+                    .note-content { line-height: 1.6; color: #1e293b; }
+                    @media print {
+                        body { padding: 0; }
+                        .note { page-break-inside: avoid; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>📝 BLineNote - Catatan Saya</h1>
+                <div class="meta">
+                    <p><strong>Exported:</strong> ${dateStamp}</p>
+                    <p><strong>Total Catatan:</strong> ${allNotes.length}</p>
+                </div>
+        `;
+        
+        allNotes.forEach((note, index) => {
+            const text = note.text || stripHTML(note.html || '');
+            const html = note.html || text.replace(/\n/g, '<br>');
+            const date = note.timestamp ? new Date(note.timestamp).toLocaleString('id-ID') : 'Tanggal tidak tersedia';
+            const tag = note.tag || 'Tanpa Tag';
+            
+            htmlContent += `
+                <div class="note">
+                    <div class="note-header">
+                        <span class="note-date">${date}</span>
+                        <span class="note-tag">${tag}</span>
+                    </div>
+                    <div class="note-content">${sanitizeHTML(html)}</div>
+                </div>
+            `;
+        });
+        
+        htmlContent += `
+            </body>
+            </html>
+        `;
+        
+        // Open in new window and trigger print
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        
+        // Wait for content to load then print
+        setTimeout(() => {
+            printWindow.print();
+            showStatus('✅ Dialog print PDF dibuka. Simpan sebagai PDF.', { type: 'success', duration: 6000 });
+        }, 500);
+        
+    } catch (error) {
+        showStatus(`❌ Export PDF gagal: ${error.message}`, { type: 'error', duration: 8000 });
+    }
+};
+
+// Scheduled auto-backup functions
+const shouldRunAutoBackup = () => {
+    if (!lastBackupTime) return true;
+    const timeSinceLastBackup = Date.now() - parseInt(lastBackupTime);
+    return timeSinceLastBackup >= AUTO_BACKUP_INTERVAL;
+};
+
+const performAutoBackup = async () => {
+    if (!userId || !allNotes.length) {
+        console.log('⏭️ Auto-backup skipped: Not logged in or no notes');
+        return;
+    }
+
+    if (!shouldRunAutoBackup()) {
+        console.log('⏭️ Auto-backup skipped: Not yet 24 hours');
+        return;
+    }
+
+    try {
+        console.log('🔄 Running scheduled auto-backup...');
+        const payload = buildBackupPayload();
+        
+        // Use a default password for auto-backup to avoid prompt
+        const autoPassword = `auto-${userId}-blinenote`;
+        const encryptedJson = await encryptData(payload, autoPassword);
+        
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const timeStamp = new Date().toTimeString().slice(0, 5).replace(':', '');
+        const safeEmail = (elements.userEmail?.textContent || 'user').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filename = `blinenote-auto-backup-${safeEmail}-${dateStamp}-${timeStamp}.json`;
+        
+        downloadText(encryptedJson, filename);
+        
+        // Update last backup time
+        lastBackupTime = Date.now().toString();
+        localStorage.setItem('lastBackupTime', lastBackupTime);
+        
+        showStatus(`✅ Auto-backup berhasil! ${allNotes.length} catatan → ${filename}`, { 
+            type: 'success', 
+            duration: 8000 
+        });
+        
+        console.log('✅ Auto-backup completed successfully');
+    } catch (error) {
+        console.error('❌ Auto-backup failed:', error);
+        showStatus(`⚠️ Auto-backup gagal: ${error.message}. Coba backup manual.`, { 
+            type: 'warning', 
+            duration: 6000 
+        });
+    }
+};
+
+const scheduleAutoBackup = () => {
+    // Clear existing timer
+    if (autoBackupTimer) {
+        clearInterval(autoBackupTimer);
+    }
+    
+    // Check immediately on schedule
+    performAutoBackup();
+    
+    // Then check every hour if backup is due
+    autoBackupTimer = setInterval(() => {
+        performAutoBackup();
+    }, 60 * 60 * 1000); // Check every hour
+    
+    console.log('⏰ Auto-backup scheduler initialized');
+};
+
+const getLastBackupInfo = () => {
+    if (!lastBackupTime) return 'Belum pernah backup';
+    
+    const lastBackup = new Date(parseInt(lastBackupTime));
+    const now = new Date();
+    const diffMs = now - lastBackup;
+    const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffDays > 0) {
+        return `${diffDays} hari yang lalu`;
+    } else if (diffHours > 0) {
+        return `${diffHours} jam yang lalu`;
+    } else {
+        return 'Baru saja';
+    }
+};
+
+const parseBackupFile = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const data = JSON.parse(reader.result);
+                resolve(data);
+            } catch (error) {
+                reject(new Error('Format JSON tidak valid'));
+            }
+        };
+        reader.onerror = () => reject(new Error('Gagal membaca file'));
+        reader.readAsText(file);
+    });
+};
+
+const normalizeImportedNote = (note) => {
+    const html = sanitizeHTML(note.html || '');
+    const text = note.text || stripHTML(html);
+    return {
+        text: text.trim(),
+        html,
+        tag: note.tag || '',
+        wordCount: text.split(/\s+/).filter(word => word.length > 0).length,
+        characterCount: text.length,
+        timestamp: note.timestamp || new Date().toISOString(),
+        updatedAt: note.updatedAt || null
+    };
+};
+
+const buildNoteDedupKey = (note) => {
+    const text = (note.text || '').trim();
+    const timestamp = note.timestamp || note.updatedAt || '';
+    const tag = note.tag || '';
+    return `${text}||${timestamp}||${tag}`;
+};
+
+const batchImportNotes = async (notes) => {
+    const notesCollectionPath = collection(db, 'users', userId, 'notes');
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
+    for (const note of notes) {
+        const noteRef = doc(notesCollectionPath);
+        batch.set(noteRef, note);
+        batchCount += 1;
+
+        if (batchCount >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            batchCount = 0;
+        }
+    }
+
+    if (batchCount > 0) {
+        await batch.commit();
+    }
+};
+
+const handleRestore = async (file) => {
+    if (!userId) {
+        showStatus('🔐 Silakan login untuk melakukan restore.', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    setBackupRestoreButtons(true);
+    try {
+        showStatus('📥 Membaca file backup...', { type: 'loading' });
+        let data = await parseBackupFile(file);
+
+        if (data?.ciphertext && data?.salt && data?.iv) {
+            const password = promptPasswordForRestore();
+            if (!password) {
+                showStatus('⚠️ Restore dibatalkan.', { type: 'warning', duration: 3000 });
+                return;
+            }
+            showStatus('🔓 Mendekripsi backup...', { type: 'loading' });
+            try {
+                data = await decryptData(JSON.stringify(data), password);
+            } catch (decryptError) {
+                showStatus(`❌ Gagal dekripsi: ${getDecryptErrorMessage(decryptError)}`, { type: 'error', duration: 8000 });
+                return;
+            }
+        } else {
+            showStatus('❌ File backup tidak terenkripsi. Hanya backup terenkripsi yang didukung.', { type: 'error', duration: 6000 });
+            return;
+        }
+
+        if (!data || !Array.isArray(data.notes)) {
+            showStatus('❌ Struktur backup tidak valid. File mungkin rusak.', { type: 'error', duration: 6000 });
+            return;
+        }
+
+        const totalNotes = data.notes.length;
+        if (!totalNotes) {
+            showStatus('⚠️ File backup kosong, tidak ada catatan untuk diimpor.', { type: 'warning', duration: 5000 });
+            return;
+        }
+
+        // Show info about backup before confirm
+        const backupDate = data.exportedAt ? new Date(data.exportedAt).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : 'tidak diketahui';
+        const proceed = confirm(`File backup (${backupDate}):\n• ${totalNotes} catatan ditemukan\n• Catatan yang sudah ada tidak akan dihapus\n• Duplikat akan otomatis dilewati\n\nLanjutkan restore?`);
+        if (!proceed) {
+            showStatus('⚠️ Restore dibatalkan.', { type: 'warning', duration: 3000 });
+            return;
+        }
+
+        showStatus(`🔍 Memeriksa ${totalNotes} catatan untuk duplikasi...`, { type: 'loading' });
+
+        const existingKeys = new Set();
+        allNotes.forEach(note => {
+            const text = note.text || stripHTML(note.html || '');
+            existingKeys.add(buildNoteDedupKey({
+                text,
+                timestamp: note.timestamp || note.updatedAt || '',
+                tag: note.tag || ''
+            }));
+        });
+
+        const notesToImport = [];
+        let skipped = 0;
+        data.notes.forEach(note => {
+            const normalized = normalizeImportedNote(note);
+            const key = buildNoteDedupKey(normalized);
+            if (existingKeys.has(key)) {
+                skipped += 1;
+                return;
+            }
+            existingKeys.add(key);
+            notesToImport.push(normalized);
+        });
+
+        if (!notesToImport.length) {
+            showStatus(`ℹ️ Semua ${totalNotes} catatan sudah ada (duplikat). Tidak ada yang perlu diimpor.`, { type: 'warning', duration: 6000 });
+            return;
+        }
+
+        showStatus(`📥 Mengimpor ${notesToImport.length} catatan baru...`, { type: 'loading' });
+        await batchImportNotes(notesToImport);
+
+        const summary = [];
+        summary.push(`${notesToImport.length} catatan berhasil diimpor`);
+        if (skipped > 0) summary.push(`${skipped} duplikat dilewati`);
+        showStatus(`✅ Restore selesai! ${summary.join(', ')}.`, { type: 'success', duration: 8000 });
+    } catch (error) {
+        showStatus(`❌ Restore gagal: ${error.message}`, { type: 'error', duration: 8000 });
+    } finally {
+        setBackupRestoreButtons(false);
+        if (elements.restoreFileInput) {
+            elements.restoreFileInput.value = '';
+        }
+    }
 };
 
 // Global functions for HTML onclick
@@ -957,10 +2381,11 @@ window.editNote = (noteId) => {
     
     // Populate editor with HTML content if available, fallback to text
     if (note.html) {
-        elements.hasilTeksDiv.innerHTML = note.html;
+        elements.hasilTeksDiv.innerHTML = sanitizeHTML(note.html);
     } else {
         // Fallback for old notes without HTML content
-        elements.hasilTeksDiv.innerHTML = note.text.replace(/\n/g, '<br>');
+        const safeText = escapeHTML(note.text || '');
+        elements.hasilTeksDiv.innerHTML = safeText.replace(/\n/g, '<br>');
     }
     elements.tagInput.value = note.tag || '';
     
@@ -984,7 +2409,7 @@ window.editNote = (noteId) => {
     // Update save button state for editing
     updateSaveButtonState('ready');
     
-    elements.statusDiv.textContent = '✏️ Mode edit - ubah teks dan klik perbarui';
+    showStatus('✏️ Mode edit - ubah teks dan klik perbarui', { type: 'info', duration: 3000 });
     console.log('✏️ Editing note:', noteId);
 };
 
@@ -994,7 +2419,7 @@ window.speakText = speakText;
 window.deleteNote = async (noteId) => {
     const note = allNotes.find(n => n.id === noteId);
     if (!note) {
-        elements.statusDiv.textContent = '❌ Catatan tidak ditemukan';
+        showStatus('❌ Catatan tidak ditemukan', { type: 'error', duration: 5000 });
         return;
     }
     
@@ -1008,28 +2433,46 @@ window.deleteNote = async (noteId) => {
     
     try {
         // Show deleting state
-        elements.statusDiv.textContent = '🗑️ Menghapus catatan...';
+        showStatus('🗑️ Menghapus catatan...', { type: 'loading' });
         
-        // Check authentication
-        if (!userId) {
-            throw new Error('Anda harus login untuk menghapus catatan');
+        // Check if running in development mode (localhost)
+        const forceProductionMode = true; // Set to false to re-enable dev mode
+        const isLocalhost = !forceProductionMode && (
+            window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname === ''
+        );
+        
+        if (isLocalhost && !userId) {
+            // Handle local development deletion
+            console.log('🧪 Development mode: Deleting from localStorage');
+            
+            let localNotes = JSON.parse(localStorage.getItem('dev-notes') || '[]');
+            localNotes = localNotes.filter(note => note.id !== noteId);
+            localStorage.setItem('dev-notes', JSON.stringify(localNotes));
+            
+            // Update allNotes and re-render
+            allNotes = localNotes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            renderTagFilters(allNotes);
+            applyFilters();
+            
+            showStatus('✅ Catatan berhasil dihapus (Mode Development)', { type: 'success', duration: 4000 });
+            
+        } else {
+            // Check authentication for production
+            if (!userId) {
+                throw new Error('Anda harus login untuk menghapus catatan');
+            }
+            
+            // Delete from Firestore
+            await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+            showStatus('✅ Catatan berhasil dihapus', { type: 'success', duration: 4000 });
         }
-        
-        // Delete from Firestore
-        await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
         
         // If currently editing this note, clear the editor
         if (editingNoteId === noteId) {
             clearEditor();
         }
-        
-        // Show success message
-        elements.statusDiv.textContent = '✅ Catatan berhasil dihapus';
-        
-        // Clear status after 3 seconds
-        setTimeout(() => {
-            elements.statusDiv.textContent = '';
-        }, 3000);
         
         console.log('✅ Note deleted successfully:', noteId);
         
@@ -1048,14 +2491,7 @@ window.deleteNote = async (noteId) => {
             errorMessage += 'Coba lagi nanti.';
         }
         
-        elements.statusDiv.textContent = errorMessage;
-        
-        // Clear error after 5 seconds
-        setTimeout(() => {
-            if (elements.statusDiv.textContent.includes('❌') || elements.statusDiv.textContent.includes('🚫')) {
-                elements.statusDiv.textContent = '';
-            }
-        }, 5000);
+        showStatus(errorMessage, { type: 'error', duration: 5000 });
     }
 };
 
@@ -1068,12 +2504,12 @@ const handleLogin = async () => {
     const password = elements.passwordLoginInput.value.trim();
     
     if (!email || !password) {
-        elements.statusDiv.textContent = '⚠️ Email dan password harus diisi';
+        showStatus('⚠️ Email dan password harus diisi', { type: 'warning', duration: 4000 });
         return;
     }
     
     try {
-        elements.statusDiv.textContent = '🔄 Sedang masuk...';
+        showStatus('🔄 Sedang masuk...', { type: 'loading' });
         await signInWithEmailAndPassword(auth, email, password);
         // Success handled in onAuthStateChanged
     } catch (error) {
@@ -1097,7 +2533,7 @@ const handleLogin = async () => {
                 errorMessage += error.message;
         }
         
-        elements.statusDiv.textContent = errorMessage;
+        showStatus(errorMessage, { type: 'error', duration: 5000 });
     }
 };
 
@@ -1106,17 +2542,25 @@ const handleSignUp = async () => {
     const password = elements.passwordDaftarInput.value.trim();
     
     if (!email || !password) {
-        elements.statusDiv.textContent = '⚠️ Email dan password harus diisi';
+        showStatus('⚠️ Email dan password harus diisi', { type: 'warning', duration: 4000 });
         return;
     }
     
-    if (password.length < 6) {
-        elements.statusDiv.textContent = '⚠️ Password minimal 6 karakter';
+    // Password strength validation
+    const passwordStrength = validatePasswordStrength(password);
+    
+    if (!passwordStrength.isValid) {
+        showStatus('⚠️ ' + passwordStrength.message, { type: 'warning', duration: 5000 });
         return;
+    }
+    
+    if (passwordStrength.strength === 'weak') {
+        const confirmed = confirm('Password Anda tergolong lemah. Disarankan menggunakan kombinasi huruf besar, huruf kecil, angka, dan simbol untuk keamanan lebih baik.\n\nLanjutkan dengan password ini?');
+        if (!confirmed) return;
     }
     
     try {
-        elements.statusDiv.textContent = '🔄 Sedang mendaftar...';
+        showStatus('🔄 Sedang mendaftar...', { type: 'loading' });
         await createUserWithEmailAndPassword(auth, email, password);
         // Success handled in onAuthStateChanged
     } catch (error) {
@@ -1137,8 +2581,53 @@ const handleSignUp = async () => {
                 errorMessage += error.message;
         }
         
-        elements.statusDiv.textContent = errorMessage;
+        showStatus(errorMessage, { type: 'error', duration: 5000 });
     }
+};
+
+// Password strength validator
+const validatePasswordStrength = (password) => {
+    const result = {
+        isValid: false,
+        strength: 'weak',
+        message: '',
+        score: 0
+    };
+    
+    // Minimum length check
+    if (password.length < 6) {
+        result.message = 'Password minimal 6 karakter';
+        return result;
+    }
+    
+    result.isValid = true;
+    let score = 0;
+    
+    // Length score
+    if (password.length >= 8) score += 1;
+    if (password.length >= 12) score += 1;
+    
+    // Complexity checks
+    if (/[a-z]/.test(password)) score += 1; // lowercase
+    if (/[A-Z]/.test(password)) score += 1; // uppercase
+    if (/[0-9]/.test(password)) score += 1; // numbers
+    if (/[^a-zA-Z0-9]/.test(password)) score += 1; // special chars
+    
+    result.score = score;
+    
+    // Determine strength
+    if (score <= 2) {
+        result.strength = 'weak';
+        result.message = 'Password lemah (gunakan kombinasi huruf, angka, dan simbol)';
+    } else if (score <= 4) {
+        result.strength = 'medium';
+        result.message = 'Password cukup kuat';
+    } else {
+        result.strength = 'strong';
+        result.message = 'Password sangat kuat';
+    }
+    
+    return result;
 };
 
 const handleLogout = async () => {
@@ -1147,7 +2636,7 @@ const handleLogout = async () => {
         // Cleanup handled in onAuthStateChanged
     } catch (error) {
         console.error('Logout error:', error);
-        elements.statusDiv.textContent = '❌ Gagal keluar: ' + error.message;
+        showStatus('❌ Gagal keluar: ' + error.message, { type: 'error', duration: 5000 });
     }
 };
 
@@ -1184,7 +2673,7 @@ const setupEventListeners = () => {
             if (text) {
                 speakText(text);
             } else {
-                elements.statusDiv.textContent = '⚠️ Tidak ada teks untuk dibaca';
+                showStatus('⚠️ Tidak ada teks untuk dibaca', { type: 'warning', duration: 4000 });
             }
         });
     }
@@ -1215,6 +2704,30 @@ const setupEventListeners = () => {
     } else {
         console.log('❌ Checkbox button NOT found');
     }
+
+    // Image upload controls
+    if (elements.imageUploadBtn && elements.imageUploadInput) {
+        if (!APP_CONFIG.enableImageUpload) {
+            elements.imageUploadBtn.classList.add('hidden');
+            elements.imageUploadBtn.setAttribute('aria-hidden', 'true');
+            elements.imageUploadBtn.setAttribute('tabindex', '-1');
+            elements.imageUploadBtn.remove();
+            elements.imageUploadInput.remove();
+        } else {
+            elements.imageUploadBtn.classList.remove('hidden');
+            elements.imageUploadBtn.addEventListener('click', () => {
+                elements.imageUploadInput.click();
+            });
+
+            elements.imageUploadInput.addEventListener('change', (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (file) {
+                    handleImageUpload(file);
+                }
+                event.target.value = '';
+            });
+        }
+    }
     
     // Content monitoring for save button state
     if (elements.hasilTeksDiv) {
@@ -1223,6 +2736,12 @@ const setupEventListeners = () => {
         elements.hasilTeksDiv.addEventListener('paste', () => {
             setTimeout(checkContentAndUpdateButtons, 100);
             handlePasteWithURLDetection();
+        });
+        
+        // Auto-save tracking
+        elements.hasilTeksDiv.addEventListener('input', trackContentChanges);
+        elements.hasilTeksDiv.addEventListener('paste', () => {
+            setTimeout(trackContentChanges, 100);
         });
         
         // Auto URL detection on typing
@@ -1243,6 +2762,7 @@ const setupEventListeners = () => {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'childList' || mutation.type === 'characterData') {
                     checkContentAndUpdateButtons();
+                    trackContentChanges();
                 }
             });
         });
@@ -1257,12 +2777,80 @@ const setupEventListeners = () => {
         setupCheckboxTextListeners();
     }
     
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+    
+    // Before unload warning
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
     // Auth controls
     if (elements.tombolSubmitLogin) elements.tombolSubmitLogin.addEventListener('click', handleLogin);
     if (elements.tombolSubmitDaftar) elements.tombolSubmitDaftar.addEventListener('click', handleSignUp);
     if (elements.tombolLogout) elements.tombolLogout.addEventListener('click', handleLogout);
     if (elements.authToggleBtn) elements.authToggleBtn.addEventListener('click', toggleAuthMode);
     if (elements.authToggleBtn2) elements.authToggleBtn2.addEventListener('click', toggleAuthMode);
+    
+    // Password strength indicator
+    const passwordDaftarInput = document.getElementById('password-daftar');
+    const passwordStrengthDiv = document.getElementById('password-strength');
+    const passwordStrengthBar = document.getElementById('password-strength-bar');
+    const passwordStrengthText = document.getElementById('password-strength-text');
+    
+    if (passwordDaftarInput && passwordStrengthDiv) {
+        passwordDaftarInput.addEventListener('input', () => {
+            const password = passwordDaftarInput.value;
+            
+            if (password.length === 0) {
+                passwordStrengthDiv.classList.add('hidden');
+                return;
+            }
+            
+            passwordStrengthDiv.classList.remove('hidden');
+            const strength = validatePasswordStrength(password);
+            
+            // Update bar width and color
+            let widthPercent = 0;
+            let colorClass = '';
+            
+            if (strength.score <= 2) {
+                widthPercent = 33;
+                colorClass = 'bg-red-500';
+                passwordStrengthText.textContent = '❌ Lemah';
+                passwordStrengthText.className = 'text-xs text-red-500';
+            } else if (strength.score <= 4) {
+                widthPercent = 66;
+                colorClass = 'bg-yellow-500';
+                passwordStrengthText.textContent = '⚠️ Sedang';
+                passwordStrengthText.className = 'text-xs text-yellow-500';
+            } else {
+                widthPercent = 100;
+                colorClass = 'bg-green-500';
+                passwordStrengthText.textContent = '✅ Kuat';
+                passwordStrengthText.className = 'text-xs text-green-500';
+            }
+            
+            passwordStrengthBar.style.width = widthPercent + '%';
+            passwordStrengthBar.className = 'h-full transition-all duration-300 ' + colorClass;
+        });
+    }
+
+    // Backup & restore controls
+    if (elements.backupBtn) elements.backupBtn.addEventListener('click', handleBackup);
+    if (elements.restoreBtn && elements.restoreFileInput) {
+        elements.restoreBtn.addEventListener('click', () => elements.restoreFileInput.click());
+        elements.restoreFileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) {
+                handleRestore(file);
+            }
+        });
+    }
+    
+    // Export controls
+    const exportTxtBtn = document.getElementById('export-txt-btn');
+    const exportPdfBtn = document.getElementById('export-pdf-btn');
+    if (exportTxtBtn) exportTxtBtn.addEventListener('click', exportToPlainText);
+    if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportToPDF);
     
 
     
@@ -1279,6 +2867,31 @@ const setupEventListeners = () => {
         signupForm.addEventListener('submit', (e) => {
             e.preventDefault();
             handleSignUp();
+        });
+    }
+    
+    // Infinite scroll for notes list
+    const catatanContainer = document.getElementById('catatan-container');
+    if (catatanContainer) {
+        catatanContainer.addEventListener('scroll', () => {
+            if (isLoadingMore) return;
+            
+            const scrollTop = catatanContainer.scrollTop;
+            const scrollHeight = catatanContainer.scrollHeight;
+            const clientHeight = catatanContainer.clientHeight;
+            
+            // Load more when user scrolls to bottom (with 100px threshold)
+            if (scrollTop + clientHeight >= scrollHeight - 100) {
+                loadMoreNotes();
+            }
+        });
+    }
+    
+    // Search input - reset pagination on search
+    if (elements.searchInput) {
+        elements.searchInput.addEventListener('input', () => {
+            displayedNotesCount = NOTES_PER_PAGE;
+            applyFilters();
         });
     }
     
@@ -1312,6 +2925,27 @@ const setupEventListeners = () => {
         }
     });
     
+    // Template selector
+    const templateSelector = document.getElementById('template-selector');
+    const insertTemplateBtn = document.getElementById('insert-template-btn');
+    
+    if (templateSelector) {
+        templateSelector.addEventListener('change', (e) => {
+            const selectedValue = e.target.value;
+            if (insertTemplateBtn) {
+                insertTemplateBtn.disabled = !selectedValue;
+            }
+        });
+    }
+    
+    if (insertTemplateBtn) {
+        insertTemplateBtn.addEventListener('click', () => {
+            if (templateSelector && templateSelector.value) {
+                insertTemplate(templateSelector.value);
+            }
+        });
+    }
+    
     console.log('✅ Event listeners setup complete');
 };
 
@@ -1320,6 +2954,32 @@ const setupEventListeners = () => {
 // ================================
 
 const initializeAuth = () => {
+    // Force production mode - disable development mode detection
+    const forceProductionMode = true; // Set to false to re-enable dev mode
+    
+    // Check if running in development mode (localhost)
+    const isLocalhost = !forceProductionMode && (
+        window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' || 
+        window.location.hostname === ''
+    );
+    
+    if (isLocalhost) {
+        console.log('🧪 Development mode detected - using localStorage');
+        
+        // Show app directly in development mode
+        elements.authPageContainer.style.display = 'none';
+        elements.mainContentContainer.style.display = 'flex';
+        
+        // Setup local development notes
+        setupLocalDevNotes();
+        
+        showStatus('🧪 Mode Development - Data disimpan lokal', { type: 'info', duration: 3000 });
+        elements.userEmail.textContent = 'Development Mode';
+        
+        return;
+    }
+    
     onAuthStateChanged(auth, (user) => {
         if (user) {
             userId = user.uid;
@@ -1332,7 +2992,10 @@ const initializeAuth = () => {
             // Setup notes listener
             setupNotesListener(userId);
             
-            elements.statusDiv.textContent = `✅ Selamat datang, ${user.email}!`;
+            // Setup scheduled auto-backup
+            scheduleAutoBackup();
+            
+            showStatus(`✅ Selamat datang, ${user.email}!`, { type: 'success', duration: 4000 });
             
             // Clear auth inputs
             elements.emailLoginInput.value = '';
@@ -1351,6 +3014,12 @@ const initializeAuth = () => {
                 unsubscribeNotes = null;
             }
             
+            // Clear auto-backup timer
+            if (autoBackupTimer) {
+                clearInterval(autoBackupTimer);
+                autoBackupTimer = null;
+            }
+            
             // Clear data
             allNotes = [];
             resetEditor();
@@ -1359,7 +3028,7 @@ const initializeAuth = () => {
             elements.authPageContainer.style.display = 'flex';
             elements.mainContentContainer.style.display = 'none';
             
-            elements.statusDiv.textContent = '';
+            showStatus('🔓 Berhasil logout', { type: 'info', duration: 3000 });
             console.log('🔓 User signed out');
         }
     });
@@ -1421,6 +3090,42 @@ window.formatCommand = (command, value = null) => {
     }
 };
 
+const HIGHLIGHT_COLOR = '#fff3a3';
+
+const getHighlightValue = () => {
+    const value = document.queryCommandValue('hiliteColor') || document.queryCommandValue('backColor');
+    return (value || '').toString().toLowerCase();
+};
+
+const isHighlightActive = () => {
+    const value = getHighlightValue();
+    if (!value) return false;
+    if (value === 'transparent' || value === 'inherit' || value === 'initial') return false;
+    if (value.includes('rgba(0, 0, 0, 0)')) return false;
+    if (value === HIGHLIGHT_COLOR) return true;
+    if (value.includes('rgb(255, 243, 163)')) return true;
+    return false;
+};
+
+// Toggle highlight for selected text
+window.toggleHighlight = () => {
+    if (!elements.hasilTeksDiv) return;
+
+    elements.hasilTeksDiv.focus();
+
+    const highlightOn = isHighlightActive();
+    const nextColor = highlightOn ? 'transparent' : HIGHLIGHT_COLOR;
+
+    try {
+        document.execCommand('hiliteColor', false, nextColor);
+    } catch (error) {
+        document.execCommand('backColor', false, nextColor);
+    }
+
+    updateToolbarButtonStates();
+    checkContentAndUpdateButtons();
+};
+
 // Insert line break
 window.insertLineBreak = () => {
     if (elements.hasilTeksDiv) {
@@ -1444,6 +3149,15 @@ const updateToolbarButtonStates = () => {
             }
         }
     });
+
+    const highlightBtn = document.getElementById('highlight-btn');
+    if (highlightBtn) {
+        if (isHighlightActive()) {
+            highlightBtn.classList.add('active');
+        } else {
+            highlightBtn.classList.remove('active');
+        }
+    }
 };
 
 // ================================
@@ -1496,7 +3210,8 @@ window.insertLink = () => {
         });
     } else {
         // If no text selected, insert new link
-        const linkHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer" title="${url}">${linkText}</a>`;
+        const safeLinkText = escapeHTML(linkText || url);
+        const linkHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer" title="${url}">${safeLinkText}</a>`;
         document.execCommand('insertHTML', false, linkHTML);
     }
     
@@ -1542,6 +3257,87 @@ window.removeLink = () => {
 };
 
 // ================================
+// Image Upload Functions
+// ================================
+
+const sanitizeFileName = (name = '') => name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+const getAltFromFileName = (name = '') => {
+    const base = name.replace(/\.[^/.]+$/, '');
+    return base.replace(/[-_]+/g, ' ').trim() || 'Gambar';
+};
+
+const insertImageToEditor = (url, fileName) => {
+    if (!elements.hasilTeksDiv) return;
+
+    const altText = escapeHTML(getAltFromFileName(fileName));
+    const imageHTML = `<figure class="note-figure"><img src="${url}" alt="${altText}" title="${altText}" class="note-image" loading="lazy" decoding="async"></figure><p><br></p>`;
+
+    elements.hasilTeksDiv.focus();
+    document.execCommand('insertHTML', false, imageHTML);
+
+    hasUnsavedChanges = true;
+    checkContentAndUpdateButtons();
+    scheduleAutoSave();
+};
+
+const handleImageUpload = async (file) => {
+    if (!file) return;
+
+    if (!APP_CONFIG.enableImageUpload) {
+        showStatus('🔒 Fitur upload gambar tersedia untuk akun premium', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    if (!userId) {
+        showStatus('🔐 Silakan login untuk upload gambar', { type: 'warning', duration: 4000 });
+        return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        showStatus('⚠️ Format gambar harus JPG, PNG, WEBP, atau GIF', { type: 'error', duration: 4000 });
+        return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+        showStatus(`⚠️ Ukuran gambar maksimal ${MAX_IMAGE_SIZE_MB}MB`, { type: 'error', duration: 4000 });
+        return;
+    }
+
+    try {
+        showStatus('⬆️ Mengunggah gambar...', { type: 'loading' });
+
+        const safeName = sanitizeFileName(file.name || `image-${Date.now()}`);
+        const path = `users/${userId}/images/${Date.now()}-${safeName}`;
+        const storageReference = storageRef(storage, path);
+
+        const uploadTask = uploadBytesResumable(storageReference, file, {
+            contentType: file.type
+        });
+
+        await new Promise((resolve, reject) => {
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    logger.debug(`⬆️ Upload progress: ${progress.toFixed(0)}%`);
+                },
+                (error) => reject(error),
+                () => resolve()
+            );
+        });
+
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        insertImageToEditor(downloadURL, safeName);
+
+        showStatus('✅ Gambar berhasil diunggah', { type: 'success', duration: 3000 });
+        logger.debug('🖼️ Image uploaded:', downloadURL);
+    } catch (error) {
+        console.error('❌ Image upload failed:', error);
+        showStatus('❌ Gagal upload gambar. Coba lagi.', { type: 'error', duration: 4000 });
+    }
+};
+
+// ================================
 // Checkbox Functions
 // ================================
 
@@ -1563,7 +3359,7 @@ window.insertCheckbox = () => {
     const checkboxHTML = `
         <div class="checkbox-item" data-checkbox-id="${checkboxId}">
             <label class="checkbox-label">
-                <input type="checkbox" class="checkbox-input" id="${checkboxId}" onchange="window.handleCheckboxChange('${checkboxId}')">
+                <input type="checkbox" class="checkbox-input" id="${checkboxId}" data-checkbox-id="${checkboxId}">
                 <span class="checkbox-custom"></span>
                 <span class="checkbox-text" contenteditable="true" data-placeholder="Tulis item checklist...">Tulis item checklist...</span>
             </label>
@@ -1622,6 +3418,13 @@ window.handleCheckboxChange = (checkboxId) => {
 const setupCheckboxTextListeners = () => {
     // Use event delegation for dynamically created checkboxes
     if (elements.hasilTeksDiv) {
+        elements.hasilTeksDiv.addEventListener('change', (e) => {
+            if (e.target.classList.contains('checkbox-input')) {
+                const checkboxId = e.target.getAttribute('data-checkbox-id') || e.target.id;
+                window.handleCheckboxChange(checkboxId);
+            }
+        });
+
         elements.hasilTeksDiv.addEventListener('keydown', (e) => {
             if (e.target.classList.contains('checkbox-text')) {
                 // Handle Enter key to create new checkbox
@@ -2039,13 +3842,14 @@ window.viewNoteDetail = (noteId) => {
     
     // Populate content dengan styling yang lebih baik
     if (note.html) {
-        detailContent.innerHTML = note.html;
+        detailContent.innerHTML = sanitizeHTML(note.html);
         // Pastikan styling rich text teraplikasi
         detailContent.style.lineHeight = '1.8';
         detailContent.style.fontSize = '16px';
     } else {
         // Format teks biasa dengan paragraph breaks
-        const formattedText = note.text
+        const safeText = escapeHTML(note.text || '');
+        const formattedText = safeText
             .split('\n\n')
             .map(paragraph => `<p class="mb-4">${paragraph.replace(/\n/g, '<br>')}</p>`)
             .join('');
@@ -2056,7 +3860,8 @@ window.viewNoteDetail = (noteId) => {
     
     // Populate tag dengan styling yang lebih menonjol
     if (note.tag) {
-        detailTagContainer.innerHTML = `<span class="inline-block bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm px-4 py-2 rounded-full shadow-sm font-medium">${note.tag}</span>`;
+        const safeTag = escapeHTML(note.tag);
+        detailTagContainer.innerHTML = `<span class="inline-block bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm px-4 py-2 rounded-full shadow-sm font-medium">${safeTag}</span>`;
     } else {
         detailTagContainer.innerHTML = '<span class="text-gray-500 dark:text-gray-400 text-sm italic">Tanpa kategori</span>';
     }

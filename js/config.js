@@ -34,5 +34,7 @@ export const APP_CONFIG = {
     // Auto URL detection settings
     autoDetectURLs: true,
     urlDetectionDelay: 1500,
-    showUrlNotifications: true
+    showUrlNotifications: true,
+    // Premium features
+    enableImageUpload: false
 };
