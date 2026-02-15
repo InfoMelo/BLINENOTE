@@ -67,6 +67,11 @@ build/
 firebase-debug.log
 .firebaserc
 
+# Security (exclude for now)
+firestore.rules
+storage.rules
+vercel.json
+
 # Backup Files
 *.backup
 *.bak
