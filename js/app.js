@@ -181,6 +181,7 @@ const elements = {
     tombolSimpanTeks: document.getElementById('tombol-simpan-teks'),
     tombolSimpanMobile: document.getElementById('tombol-simpan-mobile'),
     tombolSimpanMobileTeks: document.getElementById('tombol-simpan-mobile-teks'),
+    tombolCatatanBaru: document.getElementById('tombol-catatan-baru'),
     tombolBatal: document.getElementById('tombol-batal'),
     
     // Search and filters
@@ -1205,6 +1206,21 @@ const resetEditor = () => {
     stopRecording();
     
     console.log('✅ Editor direset');
+};
+
+const startNewNote = () => {
+    const hasEditorText = !!elements.hasilTeksDiv.textContent.trim();
+    const hasTag = !!elements.tagInput.value.trim();
+    const hasDraft = hasUnsavedChanges && (hasEditorText || hasTag);
+
+    if (hasDraft) {
+        const confirmDiscard = confirm('Anda memiliki draft yang belum disimpan. Yakin ingin membuat catatan baru?');
+        if (!confirmDiscard) return;
+    }
+
+    clearEditor();
+    elements.hasilTeksDiv.focus();
+    showStatus('📝 Siap membuat catatan baru', { type: 'success', duration: 2500 });
 };
 
 // ================================
@@ -2642,6 +2658,7 @@ const setupEventListeners = () => {
     
     // Editor controls
     if (elements.tombolBatal) elements.tombolBatal.addEventListener('click', resetEditor);
+    if (elements.tombolCatatanBaru) elements.tombolCatatanBaru.addEventListener('click', startNewNote);
     if (elements.tombolBacaEditor) {
         elements.tombolBacaEditor.addEventListener('click', () => {
             const text = elements.hasilTeksDiv.textContent.trim();
