@@ -780,6 +780,36 @@ body {
         font-size: 0.95rem;
     }
 
+    #filter-sort-bar {
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    #filter-sort-bar > div:first-child {
+        flex: 1 1 100%;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding-bottom: 1px;
+    }
+
+    #filter-sort-bar > div:first-child::-webkit-scrollbar {
+        display: none;
+    }
+
+    #sort-select {
+        margin-left: auto;
+    }
+
+    #status-div {
+        left: 0.5rem;
+        right: 0.5rem;
+        bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+        max-width: none;
+    }
+
     #mobile-nav {
         height: 3.65rem;
         box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.12);

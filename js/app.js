@@ -213,8 +213,8 @@ const elements = {
     // Views
     editorView: document.getElementById('editor-view'),
     notesView: document.getElementById('notes-view'),
-    editorNavBtn: document.getElementById('editor-nav-btn'),
-    notesNavBtn: document.getElementById('notes-nav-btn'),
+    editorNavBtn: document.getElementById('nav-editor-btn'),
+    notesNavBtn: document.getElementById('nav-notes-btn'),
     
     // Templates
     templateSelector: document.getElementById('template-selector'),
@@ -899,7 +899,7 @@ const switchView = (viewToShow) => {
 
 const updateMobileNav = () => {
     const isMobile = window.innerWidth < 768;
-    const mobileNav = document.querySelector('.mobile-nav');
+    const mobileNav = document.getElementById('mobile-nav');
     
     if (isMobile) {
         if (mobileNav) mobileNav.style.display = 'flex';
