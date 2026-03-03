@@ -5,7 +5,7 @@
 // Environment Detection
 const modeParam = (new URLSearchParams(window.location.search).get('mode') || '').toLowerCase();
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const isDevelopment = modeParam === 'dev' || modeParam === 'developer' || (isLocalhost && modeParam !== 'user');
+const isDevelopment = isLocalhost && (modeParam === 'dev' || modeParam === 'developer' || modeParam !== 'user');
 const isProduction = !isDevelopment;
 
 // Firebase Configuration - Safe for client-side

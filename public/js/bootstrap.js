@@ -8,20 +8,33 @@ window.addEventListener('error', (e) => {
     });
 
     const errorDiv = document.createElement('div');
-    errorDiv.innerHTML = `
-        <div class="error-notification">
-            <strong>⚠️ Error Detected</strong><br>
-            <small>${e.message}</small><br>
-            <button class="notification-close-btn js-close-notification">Tutup</button>
-        </div>
-    `;
+    const notification = document.createElement('div');
+    notification.className = 'error-notification';
+
+    const title = document.createElement('strong');
+    title.textContent = '⚠️ Error Detected';
+
+    const titleBreak = document.createElement('br');
+
+    const message = document.createElement('small');
+    message.textContent = e.message || 'Unknown error';
+
+    const messageBreak = document.createElement('br');
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'notification-close-btn js-close-notification';
+    closeButton.textContent = 'Tutup';
+
+    notification.appendChild(title);
+    notification.appendChild(titleBreak);
+    notification.appendChild(message);
+    notification.appendChild(messageBreak);
+    notification.appendChild(closeButton);
+    errorDiv.appendChild(notification);
 
     document.body.appendChild(errorDiv);
 
-    const closeButton = errorDiv.querySelector('.js-close-notification');
-    if (closeButton) {
-        closeButton.addEventListener('click', () => errorDiv.remove());
-    }
+    closeButton.addEventListener('click', () => errorDiv.remove());
 
     setTimeout(() => {
         if (errorDiv.parentElement) {
@@ -34,20 +47,33 @@ window.addEventListener('unhandledrejection', (e) => {
     console.error('🚨 Unhandled Promise Rejection:', e.reason);
 
     const errorDiv = document.createElement('div');
-    errorDiv.innerHTML = `
-        <div class="warning-notification">
-            <strong>⚠️ Connection Issue</strong><br>
-            <small>Ada masalah koneksi atau konfigurasi</small><br>
-            <button class="notification-close-btn js-close-notification">Tutup</button>
-        </div>
-    `;
+    const notification = document.createElement('div');
+    notification.className = 'warning-notification';
+
+    const title = document.createElement('strong');
+    title.textContent = '⚠️ Connection Issue';
+
+    const titleBreak = document.createElement('br');
+
+    const message = document.createElement('small');
+    message.textContent = 'Ada masalah koneksi atau konfigurasi';
+
+    const messageBreak = document.createElement('br');
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'notification-close-btn js-close-notification';
+    closeButton.textContent = 'Tutup';
+
+    notification.appendChild(title);
+    notification.appendChild(titleBreak);
+    notification.appendChild(message);
+    notification.appendChild(messageBreak);
+    notification.appendChild(closeButton);
+    errorDiv.appendChild(notification);
 
     document.body.appendChild(errorDiv);
 
-    const closeButton = errorDiv.querySelector('.js-close-notification');
-    if (closeButton) {
-        closeButton.addEventListener('click', () => errorDiv.remove());
-    }
+    closeButton.addEventListener('click', () => errorDiv.remove());
 
     setTimeout(() => {
         if (errorDiv.parentElement) {

@@ -14,6 +14,15 @@ class ErrorHandler {
         };
     }
 
+    sanitizeText(text = '') {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // Retry with exponential backoff
     async retryWithExponentialBackoff(fn, options = {}) {
         const config = { ...this.retryDefaults, ...options };
@@ -95,6 +104,7 @@ class ErrorHandler {
     showUserError(message, type = 'error', duration = 5000) {
         const errorContainer = document.createElement('div');
         errorContainer.className = `fixed top-4 right-4 z-50 max-w-sm p-4 rounded-lg shadow-lg transition-all duration-300 ${this.getErrorStyles(type)}`;
+        const safeMessage = this.sanitizeText(message);
         
         errorContainer.innerHTML = `
             <div class="flex items-start gap-3">
@@ -102,7 +112,7 @@ class ErrorHandler {
                     ${this.getErrorIcon(type)}
                 </div>
                 <div class="flex-grow">
-                    <p class="text-sm font-medium">${message}</p>
+                    <p class="text-sm font-medium">${safeMessage}</p>
                 </div>
                 <button class="flex-shrink-0 text-gray-400 hover:text-gray-600 js-close-error">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
