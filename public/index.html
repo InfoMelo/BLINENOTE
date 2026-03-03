@@ -28,20 +28,15 @@
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Tailwind CSS - Production Build -->
-    <link rel="stylesheet" href="./css/styles.css">
-    
-    <!-- Custom Styles -->
+    <!-- App Styles -->
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/custom.css">
 </head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+<body class="m-0 bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
     <!-- Background Gradient -->
     <div class="fixed inset-0 -z-10 h-full w-full bg-gradient-to-br from-indigo-50 via-white to-sky-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900"></div>
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div id="status-div" class="mb-4 text-center text-red-500 text-sm h-5"></div>
-    </div>
+    <div id="status-div" class="status-toast"></div>
 
     <!-- Halaman Otentikasi (Tampilan Awal) -->
     <div id="auth-page-container" class="min-h-screen flex items-center justify-center p-4">
@@ -91,7 +86,7 @@
                         <div id="password-strength" class="mt-2 hidden">
                             <div class="flex items-center gap-2">
                                 <div class="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                    <div id="password-strength-bar" class="h-full transition-all duration-300" style="width: 0%"></div>
+                                    <div id="password-strength-bar" class="h-full transition-all duration-300 w-0"></div>
                                 </div>
                                 <span id="password-strength-text" class="text-xs"></span>
                             </div>
@@ -113,82 +108,82 @@
 
     <!-- Konten Aplikasi Utama (Awalnya tersembunyi) -->
     <div id="main-content-container" class="hidden">
-        <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-            <!-- Header Utama -->
-            <header class="flex justify-between items-center mb-10">
-                <div class="flex items-center gap-4">
-                    <img src="assets/logo.png" alt="BLineNote Logo" class="w-12 h-12 object-contain">
-                    <div class="text-left">
-                         <h1 class="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white">BLineNote</h1>
-                         <p class="text-slate-600 dark:text-slate-400 mt-2">Rekam, transkripsikan, dan kelola ide Anda.</p>
-                    </div>
+        <!-- Topbar Compact -->
+        <header id="main-navbar" class="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200">
+            <div class="container mx-auto px-6 h-14 flex justify-between items-center">
+                <div class="flex items-center gap-2 min-w-0">
+                    <img src="assets/logo.png" alt="BLineNote Logo" class="w-7 h-7 object-contain">
+                    <span class="text-base font-bold text-slate-800 tracking-tight">BLineNote</span>
                 </div>
                 <div id="auth-container">
-                     <div id="user-info" class="flex items-center gap-4">
-                         <span id="user-email" class="text-sm text-slate-600 dark:text-slate-300 hidden sm:block"></span>
-                         <button id="tombol-logout" class="px-4 py-2 bg-slate-500 text-white font-semibold rounded-lg shadow-md hover:bg-slate-600">Keluar</button>
-                     </div>
+                    <div id="user-info" class="flex items-center justify-end gap-2 sm:gap-3">
+                        <span id="user-email" class="text-xs text-slate-500 hidden sm:block max-w-[160px] truncate"></span>
+                        <div id="user-avatar" class="flex-shrink-0 select-none">?</div>
+                        <button id="tombol-logout" class="px-3 py-1 text-xs bg-slate-100 text-slate-700 border border-slate-200 rounded-md hover:bg-slate-200 transition-colors">Keluar</button>
+                    </div>
                 </div>
-            </header>
+            </div>
+        </header>
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-6">
             
             <!-- Konten Aplikasi -->
-            <main id="app-container" class="md:grid md:grid-cols-5 gap-8 pb-20 md:pb-0">
-                <!-- Kolom Kiri: Editor (lebih besar) -->
-                <div id="editor-view" class="md:col-span-3 flex-col gap-6">
-                    <div id="editor-card" class="glass-card rounded-2xl shadow-lg p-6 transition-all relative">
+            <main id="app-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-16 md:pb-0 items-start">
+                <!-- Kolom Kiri: Editor -->
+                <div id="editor-view" class="flex flex-col gap-3">
+                    <div id="editor-card" class="glass-card rounded-xl shadow-md p-4 transition-all relative">
                         <!-- Rich Text Formatting Toolbar -->
-                        <div id="formatting-toolbar" class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                            <button type="button" onclick="formatCommand('bold')" title="Bold" class="toolbar-btn">
+                        <div id="formatting-toolbar" class="flex flex-wrap gap-1 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                            <button type="button" data-format-command="bold" title="Bold" class="toolbar-btn">
                                 <i class="fas fa-bold"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('italic')" title="Italic" class="toolbar-btn">
+                            <button type="button" data-format-command="italic" title="Italic" class="toolbar-btn">
                                 <i class="fas fa-italic"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('underline')" title="Underline" class="toolbar-btn">
+                            <button type="button" data-format-command="underline" title="Underline" class="toolbar-btn">
                                 <i class="fas fa-underline"></i>
                             </button>
-                            <button type="button" id="highlight-btn" onclick="toggleHighlight()" title="Highlight" class="toolbar-btn">
+                            <button type="button" id="highlight-btn" data-toolbar-action="toggle-highlight" title="Highlight" class="toolbar-btn">
                                 <i class="fas fa-highlighter"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                            <button type="button" onclick="formatCommand('justifyLeft')" title="Align Left" class="toolbar-btn">
+                            <button type="button" data-format-command="justifyLeft" title="Align Left" class="toolbar-btn">
                                 <i class="fas fa-align-left"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('justifyCenter')" title="Align Center" class="toolbar-btn">
+                            <button type="button" data-format-command="justifyCenter" title="Align Center" class="toolbar-btn">
                                 <i class="fas fa-align-center"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('justifyRight')" title="Align Right" class="toolbar-btn">
+                            <button type="button" data-format-command="justifyRight" title="Align Right" class="toolbar-btn">
                                 <i class="fas fa-align-right"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                            <button type="button" onclick="formatCommand('insertUnorderedList')" title="Bullet List" class="toolbar-btn">
+                            <button type="button" data-format-command="insertUnorderedList" title="Bullet List" class="toolbar-btn">
                                 <i class="fas fa-list-ul"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('insertOrderedList')" title="Numbered List" class="toolbar-btn">
+                            <button type="button" data-format-command="insertOrderedList" title="Numbered List" class="toolbar-btn">
                                 <i class="fas fa-list-ol"></i>
                             </button>
-                            <button type="button" onclick="window.insertCheckbox()" title="Insert Checkbox" class="toolbar-btn">
+                            <button type="button" data-toolbar-action="insert-checkbox" title="Insert Checkbox" class="toolbar-btn">
                                 <i class="fas fa-check-square"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                            <button type="button" onclick="insertLink()" title="Insert Link" class="toolbar-btn">
+                            <button type="button" data-toolbar-action="insert-link" title="Insert Link" class="toolbar-btn">
                                 <i class="fas fa-link"></i>
                             </button>
-                            <button type="button" onclick="removeLink()" title="Remove Link" class="toolbar-btn">
+                            <button type="button" data-toolbar-action="remove-link" title="Remove Link" class="toolbar-btn">
                                 <i class="fas fa-unlink"></i>
                             </button>
                             <button type="button" id="image-upload-btn" title="Upload Gambar" class="toolbar-btn hidden">
                                 <i class="fas fa-image"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                            <button type="button" onclick="insertLineBreak()" title="Line Break" class="toolbar-btn">
+                            <button type="button" data-toolbar-action="insert-line-break" title="Line Break" class="toolbar-btn">
                                 <i class="fas fa-level-down-alt"></i>
                             </button>
-                            <button type="button" onclick="formatCommand('removeFormat')" title="Clear Formatting" class="toolbar-btn">
+                            <button type="button" data-format-command="removeFormat" title="Clear Formatting" class="toolbar-btn">
                                 <i class="fas fa-remove-format"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                            <button type="button" id="auto-url-toggle" onclick="toggleAutoURLDetection()" title="Auto URL Detection" class="toolbar-btn auto-url-enabled">
+                            <button type="button" id="auto-url-toggle" data-toolbar-action="toggle-auto-url" title="Auto URL Detection" class="toolbar-btn auto-url-enabled">
                                 <i class="fas fa-magic"></i>
                             </button>
                             <div class="w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
@@ -207,103 +202,88 @@
                             </button>
                         </div>
 
-                        <input type="file" id="restore-file-input" class="hidden" accept="application/json">
+                        <input type="file" id="restore-file-input" class="hidden" accept="application/json" aria-label="Pilih file restore catatan" title="Pilih file restore catatan">
                         <input type="file" id="image-upload-input" class="hidden" accept="image/*" aria-label="Upload gambar">
                         
-                        <!-- Quick Templates (Optional) -->
-                        <div class="mb-3 flex items-center gap-2">
-                            <span class="text-xs text-slate-500 dark:text-slate-400">Template Cepat:</span>
-                            <select id="template-selector" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                                <option value="">-- Pilih Template (Opsional) --</option>
-                                <option value="blank">📄 Kosong (Default)</option>
+                        <!-- Quick Templates -->
+                        <div class="mb-2 flex items-center gap-2">
+                            <select id="template-selector" aria-label="Pilih template cepat" title="Pilih template cepat" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-1 max-w-[200px]">
+                                <option value="">📄 Template...</option>
+                                <option value="blank">📄 Kosong</option>
                                 <option value="meeting">📝 Catatan Rapat</option>
-                                <option value="expense">💰 Catatan Pengeluaran</option>
+                                <option value="expense">💰 Pengeluaran</option>
                                 <option value="study">📚 Catatan Belajar</option>
                                 <option value="daily">📋 Jurnal Harian</option>
-                                <option value="travel">✈️ Catatan Perjalanan</option>
-                                <option value="ideas">💡 Ideas/Brainstorm</option>
+                                <option value="travel">✈️ Perjalanan</option>
+                                <option value="ideas">💡 Brainstorm</option>
                             </select>
-                            <button id="insert-template-btn" class="text-xs px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                Gunakan Template
+                            <button id="insert-template-btn" class="text-xs px-2 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap" disabled>
+                                Gunakan
                             </button>
                         </div>
                         
-                        <div id="hasil-teks" contenteditable="true" placeholder="Mulai berbicara atau ketik di sini..." class="w-full min-h-[200px] md:min-h-[250px] text-slate-800 dark:text-slate-200 text-lg leading-relaxed focus:outline-none"></div>
-                        <div class="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
-                            <input type="text" id="tag-input" placeholder="Tambahkan label... (misal: Pekerjaan)" class="w-full bg-transparent text-slate-600 dark:text-slate-300 placeholder-slate-400 focus:outline-none">
+                        <div id="hasil-teks" contenteditable="true" placeholder="Mulai berbicara atau ketik di sini..." class="w-full min-h-[180px] md:min-h-[220px] text-slate-800 dark:text-slate-200 text-base leading-relaxed focus:outline-none"></div>
+                        <div class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-2">
+                            <input type="text" id="tag-input" placeholder="🏷 Label... (misal: Pekerjaan)" class="w-full bg-transparent text-sm text-slate-600 dark:text-slate-300 placeholder-slate-400 focus:outline-none">
+                        </div>
+                        <!-- Tombol Aksi (Desktop) – di dalam editor card -->
+                        <div class="hidden md:flex items-center justify-between mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <div id="status" class="text-xs text-slate-400 dark:text-slate-500 flex-1 min-w-0 mr-3 truncate"></div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <button id="tombol-rekam" class="flex items-center gap-1.5 px-3 py-1.5 border border-red-400 text-red-600 dark:text-red-400 dark:border-red-500 text-sm font-medium rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 transition-all duration-200">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"></path></svg>
+                                    <span id="tombol-rekam-teks">Rekam</span>
+                                </button>
+                                <button id="tombol-pause" class="hidden display-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-1 transition-all duration-200">
+                                    <svg id="pause-icon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path></svg>
+                                    <svg id="resume-icon" class="hidden w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                                    <span id="tombol-pause-teks">Jeda</span>
+                                </button>
+                                <button id="tombol-baca-editor" title="Baca Teks di Editor" class="flex items-center justify-center h-8 w-8 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 transition-all duration-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                                </button>
+                                <button id="tombol-batal" class="hidden display-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 transition-all duration-200">
+                                    <span>Batal</span>
+                                </button>
+                                <button id="tombol-simpan" class="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                                    <span id="tombol-simpan-teks">Simpan</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <!-- Tombol Desktop -->
-                    <div class="hidden md:flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-6">
-                        <button id="tombol-rekam" class="flex items-center justify-center gap-3 w-auto px-6 py-3 bg-red-600 text-white font-semibold rounded-full shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-300">
-                            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"></path></svg>
-                            <span id="tombol-rekam-teks">Mulai Merekam</span>
-                        </button>
-                        <button id="tombol-pause" class="hidden flex items-center justify-center gap-3 w-auto px-6 py-3 bg-orange-500 text-white font-semibold rounded-full shadow-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 transition-all duration-300">
-                            <svg id="pause-icon" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path></svg>
-                            <svg id="resume-icon" class="hidden w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
-                            <span id="tombol-pause-teks">Jeda</span>
-                        </button>
-                        <button id="tombol-baca-editor" title="Baca Teks di Editor" class="flex items-center justify-center h-12 w-12 bg-teal-500 text-white font-semibold rounded-full shadow-md hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-300">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
-                        </button>
-                        <button id="tombol-simpan" class="flex items-center justify-center gap-3 w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-full shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                            <span id="tombol-simpan-teks">Simpan</span>
-                        </button>
-                        <button id="tombol-batal" class="hidden flex items-center justify-center gap-3 w-auto px-6 py-3 bg-slate-500 text-white font-semibold rounded-full shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-all duration-300">
-                            <span>Batal</span>
-                        </button>
-                    </div>
-                    <div id="status" class="text-center text-sm text-slate-500 dark:text-slate-400 h-5"></div>
                 </div>
 
                 <!-- Kolom Kanan: Daftar Catatan -->
-                <div id="notes-view" class="md:col-span-2 flex-col gap-6">
+                <div id="notes-view" class="flex flex-col gap-2">
                     <div class="relative">
                         <input type="search" id="search-input" placeholder="Cari catatan..." class="w-full pl-10 pr-4 py-2 rounded-full border border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow">
-                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
                     
-                    <!-- Quick Filter Buttons -->
-                    <div class="flex flex-col gap-3">
-                        <!-- Date Quick Filters -->
-                        <div class="flex flex-wrap gap-2 items-center">
-                            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Periode:</span>
-                            <button id="filter-all" onclick="window.setDateFilter('all')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm">
-                                📋 Semua
-                            </button>
-                            <button id="filter-today" onclick="window.setDateFilter('today')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                                📅 Hari Ini
-                            </button>
-                            <button id="filter-week" onclick="window.setDateFilter('week')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                                📆 Minggu Ini
-                            </button>
-                            <button id="filter-month" onclick="window.setDateFilter('month')" class="quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                                🗓️ Bulan Ini
-                            </button>
+                    <!-- Quick Filter + Sort Bar (1-row) -->
+                    <div id="filter-sort-bar">
+                        <!-- Kiri: Grup filter waktu -->
+                        <div class="flex items-center gap-1">
+                            <span class="filter-label">Filter:</span>
+                            <button id="filter-all" class="quick-filter-btn active">Semua</button>
+                            <button id="filter-today" class="quick-filter-btn">Hari Ini</button>
+                            <button id="filter-week" class="quick-filter-btn">Minggu</button>
+                            <button id="filter-month" class="quick-filter-btn">Bulan</button>
                         </div>
-                        
-                        <!-- Sort Options -->
-                        <div class="flex flex-wrap gap-2 items-center">
-                            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Urutan:</span>
-                            <button id="sort-newest" onclick="window.setSortOrder('newest')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm">
-                                🔽 Terbaru
-                            </button>
-                            <button id="sort-oldest" onclick="window.setSortOrder('oldest')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                                🔼 Terlama
-                            </button>
-                            <button id="sort-alpha" onclick="window.setSortOrder('alphabetical')" class="quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600">
-                                🔤 A-Z
-                            </button>
-                        </div>
+                        <!-- Kanan: Dropdown sort -->
+                        <select id="sort-select" title="Urutan tampilan">
+                            <option value="newest">Terbaru</option>
+                            <option value="oldest">Terlama</option>
+                            <option value="alphabetical">A–Z</option>
+                        </select>
                     </div>
                     
                     <!-- Active Filters Display -->
-                    <div id="active-filters-container" class="flex flex-wrap gap-2 items-center hidden">
+                    <div id="active-filters-container" class="display-flex flex-wrap gap-2 items-center hidden">
                         <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Filter Aktif:</span>
                         <div id="active-filters-badges" class="flex flex-wrap gap-2"></div>
-                        <button id="clear-all-filters" onclick="window.clearAllFilters()" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors">
+                        <button id="clear-all-filters" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-full transition-colors">
                             ✕ Hapus Semua Filter
                         </button>
                     </div>
@@ -314,46 +294,47 @@
                     </div>
                     
                     <div id="tag-filters-container" class="flex flex-wrap gap-2"></div>
-                    <div class="flex justify-between items-center border-b-2 border-slate-200 dark:border-slate-700 pb-2">
-                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Daftar Catatan</h2>
-                        <button id="tombol-pengaturan" title="Pengaturan" class="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
+                    <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Catatan</h2>
+                        <button id="tombol-pengaturan" title="Pengaturan" class="p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                         </button>
                     </div>
-                    <div id="catatan-tersimpan-container" class="space-y-4 max-h-[70vh] overflow-y-auto pr-2"></div>
+                    <div id="catatan-tersimpan-container" class="space-y-1.5 max-h-[calc(100vh-20rem)] md:max-h-[calc(100vh-16rem)] overflow-y-auto pr-1 notes-scroll"></div>
                 </div>
             </main>
         </div>
+        </div>
         
         <!-- Navigasi Mobile & FAB -->
-        <div id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 flex justify-around items-center h-16 z-40">
+        <div id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-700/80 flex justify-around items-center h-14 z-40 safe-area-bottom">
             <button id="nav-notes-btn" class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 w-full h-full transition-colors">
-                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                <span class="text-xs font-medium">Catatan</span>
+                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                <span class="text-[10px] font-medium">Catatan</span>
             </button>
             <button id="tombol-simpan-mobile" class="flex flex-col items-center justify-center text-indigo-600 dark:text-indigo-400 w-full h-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                <span id="tombol-simpan-mobile-teks" class="text-xs font-medium">Simpan</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                <span id="tombol-simpan-mobile-teks" class="text-[10px] font-medium">Simpan</span>
             </button>
             <button id="nav-editor-btn" class="flex flex-col items-center justify-center text-indigo-600 dark:text-indigo-400 w-full h-full transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                <span class="text-xs font-medium">Editor</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                <span class="text-[10px] font-medium">Editor</span>
             </button>
         </div>
 
-        <button id="fab-rekam" title="Rekam Suara" class="md:hidden hidden z-40 right-4 bottom-20 h-16 w-16 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+        <button id="fab-rekam" title="Rekam Suara" class="md:hidden hidden z-40 right-4 bottom-[4.25rem] h-14 w-14 bg-red-600 text-white rounded-full display-flex items-center justify-center shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
             <svg id="fab-rekam-icon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"></path></svg>
         </button>
 
-        <button id="fab-pause" title="Jeda/Lanjut Rekam" class="md:hidden hidden z-40 right-24 bottom-20 h-14 w-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2">
+        <button id="fab-pause" title="Jeda/Lanjut Rekam" class="md:hidden hidden z-40 right-[4.75rem] bottom-[4.5rem] h-11 w-11 bg-orange-500 text-white rounded-full display-flex items-center justify-center shadow-lg hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2">
             <svg id="fab-pause-icon" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path></svg>
             <svg id="fab-resume-icon" class="hidden w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
         </button>
     </div>
     
     <!-- Modals -->
-    <div id="modal-pengaturan" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
-        <div class="glass-card rounded-lg shadow-xl p-6 w-full max-w-md">
+    <div id="modal-pengaturan" class="fixed inset-0 bg-black/45 display-flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-5 w-full max-w-sm border border-slate-200/50 dark:border-slate-700/50">
             <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">Pengaturan</h3>
             <div class="mt-4 space-y-4">
                 <div>
@@ -372,8 +353,8 @@
             </div>
         </div>
     </div>
-     <div id="modal-hapus" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
-        <div class="glass-card rounded-lg shadow-xl p-6 w-full max-w-sm">
+    <div id="modal-hapus" class="fixed inset-0 bg-black/45 display-flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-5 w-full max-w-xs border border-slate-200/50 dark:border-slate-700/50">
             <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">Hapus Catatan?</h3>
             <p class="text-slate-600 dark:text-slate-400 mt-2">Apakah Anda yakin ingin menghapus catatan ini?</p>
             <div class="mt-6 flex justify-end gap-4">
@@ -382,11 +363,11 @@
             </div>
         </div>
     </div>
-    <div id="modal-gemini" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
-        <div class="glass-card rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div id="modal-gemini" class="fixed inset-0 bg-black/45 display-flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-5 w-full max-w-2xl max-h-[90vh] flex flex-col border border-slate-200/50 dark:border-slate-700/50">
             <h3 id="gemini-title" class="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Hasil dari Gemini AI</h3>
             <div id="gemini-content" class="flex-grow overflow-y-auto bg-slate-50/50 dark:bg-slate-800/50 p-4 rounded-md min-h-[200px]">
-                <div id="gemini-loader" class="flex items-center justify-center h-full">
+                <div id="gemini-loader" class="display-flex items-center justify-center h-full hidden">
                     <div class="loader"></div>
                 </div>
                 <div id="gemini-result-text" class="whitespace-pre-wrap text-slate-700 dark:text-slate-300"></div>
@@ -409,152 +390,53 @@
     </div>
 
     
-    <!-- Error Handler -->
-    <script>
-        // Global error handler
-        window.addEventListener('error', (e) => {
-            console.error('🚨 Global Error:', {
-                message: e.message,
-                source: e.filename,
-                line: e.lineno,
-                column: e.colno,
-                error: e.error
-            });
-            
-            // Show user-friendly error message
-            const errorDiv = document.createElement('div');
-            errorDiv.innerHTML = `
-                <div class="error-notification">
-                    <strong>⚠️ Error Detected</strong><br>
-                    <small>${e.message}</small><br>
-                    <button onclick="this.parentElement.parentElement.remove()" class="notification-close-btn">Tutup</button>
-                </div>
-            `;
-            document.body.appendChild(errorDiv);
-            
-            // Auto remove after 10 seconds
-            setTimeout(() => {
-                if (errorDiv.parentElement) {
-                    errorDiv.remove();
-                }
-            }, 10000);
-        });
-        
-        // Unhandled promise rejection handler
-        window.addEventListener('unhandledrejection', (e) => {
-            console.error('🚨 Unhandled Promise Rejection:', e.reason);
-            
-            const errorDiv = document.createElement('div');
-            errorDiv.innerHTML = `
-                <div class="warning-notification">
-                    <strong>⚠️ Connection Issue</strong><br>
-                    <small>Ada masalah koneksi atau konfigurasi</small><br>
-                    <button onclick="this.parentElement.parentElement.remove()" class="notification-close-btn">Tutup</button>
-                </div>
-            `;
-            document.body.appendChild(errorDiv);
-            
-            setTimeout(() => {
-                if (errorDiv.parentElement) {
-                    errorDiv.remove();
-                }
-            }, 10000);
-        });
-        
-        // Check if running on localhost
-        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-            console.log('🔧 Development mode detected - debug tools available');
-            console.log('💡 Run testFirebaseConnection() to diagnose connection issues');
-            console.log('🔍 Run debugMonitor.getErrorReport() to see current status');
-            
-            // Show debug panel and test button in development
-            const debugPanel = document.getElementById('debug-panel');
-            const testConnectionBtn = document.getElementById('test-connection-btn');
-            
-            if (debugPanel) {
-                debugPanel.classList.remove('hidden');
-            }
-            if (testConnectionBtn) {
-                testConnectionBtn.classList.remove('hidden');
-            }
-        }
-        
-        // Global functions for development tools (defined early to prevent ReferenceError)
-        // These are safe placeholder functions that will be replaced when app loads
-        window.testFirebaseConnection = async function() {
-            console.log('⚠️ Application loading... Please wait and try again.');
-        };
-        
-        window.quickConnectivityTest = async function() {
-            console.log('⚠️ Application loading... Please wait and try again.');
-        };
-        
-        window.showDebugInfo = function() {
-            console.log('⚠️ Application loading... Please wait and try again.');
-        };
-        
-        window.showHelp = function() {
-            console.log('❓ BLineNote Development Tools - Application still loading...');
-        };
-    </script>
+    <!-- Bootstrap script -->
+    <script src="js/bootstrap.js?v=20260303-1"></script>
     
-    <!-- Debug Panel (Hidden by default, shown in development) -->
-    <div id="debug-panel" class="hidden fixed bottom-4 right-4 w-80 max-h-96 overflow-auto bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg z-50">
-        <div class="p-4">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Debug Monitor</h3>
-                <button onclick="debugMonitor?.clearErrors()" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
-                    Clear
+    <!-- Halaman Detail Catatan -->
+    <div id="note-detail-page" class="hidden fixed inset-0 bg-slate-50 dark:bg-slate-900 z-50 overflow-y-auto">
+        <!-- Sticky Detail Header -->
+        <div id="detail-header" class="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-700">
+            <div class="container mx-auto px-4 sm:px-6 max-w-4xl h-14 flex items-center justify-between">
+                <button id="close-detail-btn" class="flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+                    <i class="fas fa-arrow-left text-xs"></i>
+                    <span>Kembali</span>
                 </button>
-            </div>
-            <div id="debug-content" class="text-xs">
-                <div class="bg-green-100 dark:bg-green-900 border border-green-400 text-green-700 dark:text-green-300 px-3 py-2 rounded">
-                    <strong>Status: Initializing...</strong>
+                <div class="flex items-center gap-1.5">
+                    <img src="assets/logo.png" alt="BLineNote" class="w-6 h-6 object-contain">
+                    <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">Detail Catatan</span>
+                </div>
+                <div class="flex gap-1.5">
+                    <button id="detail-ai-btn" class="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-md transition-colors" title="Bantuan AI">
+                        <i class="fas fa-wand-magic-sparkles text-sm"></i>
+                    </button>
+                    <button id="detail-speak-btn" class="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-md transition-colors" title="Baca catatan">
+                        <i class="fas fa-volume-up text-sm"></i>
+                    </button>
+                    <button id="detail-edit-btn" class="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-md transition-colors" title="Edit catatan">
+                        <i class="fas fa-edit text-sm"></i>
+                    </button>
+                    <button id="detail-delete-btn" class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-md transition-colors" title="Hapus catatan">
+                        <i class="fas fa-trash text-sm"></i>
+                    </button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Halaman Detail Catatan -->
-    <div id="note-detail-page" class="hidden fixed inset-0 bg-white dark:bg-slate-900 z-50 overflow-y-auto">
-        <div class="container mx-auto p-4 sm:p-6 max-w-4xl">
-            <!-- Header Detail -->
-            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
-                <button id="close-detail-btn" class="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
-                    <i class="fas fa-arrow-left"></i>
-                    <span>Kembali</span>
-                </button>
-                <div class="flex items-center gap-2">
-                    <img src="assets/logo.png" alt="BLineNote" class="w-8 h-8 object-contain">
-                    <h1 class="text-xl font-bold text-slate-800 dark:text-slate-200">Detail Catatan</h1>
-                </div>
-                <div class="flex gap-2">
-                    <button id="detail-speak-btn" class="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors" title="Baca catatan">
-                        <i class="fas fa-volume-up"></i>
-                    </button>
-                    <button id="detail-edit-btn" class="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900 rounded-lg transition-colors" title="Edit catatan">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button id="detail-delete-btn" class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-colors" title="Hapus catatan">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-
+        <div class="container mx-auto px-4 sm:px-6 max-w-4xl py-5 sm:py-6">
             <!-- Konten Detail -->
-            <div class="glass-card rounded-2xl shadow-lg p-6">
+            <div id="detail-card" class="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200/70 dark:border-slate-700/50 p-5 sm:p-6">
                 <!-- Tag dan Metadata -->
-                <div id="detail-tag-container" class="mb-4"></div>
-                <div id="detail-metadata" class="flex flex-wrap gap-4 text-sm text-slate-600 dark:text-slate-400 mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+                <div id="detail-tag-container" class="mb-3"></div>
+                <div id="detail-metadata" class="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
                     <span id="detail-date"><i class="fas fa-calendar-alt mr-1"></i><span class="date-text"></span></span>
-                    <span id="detail-updated" class="hidden text-gray-500 dark:text-gray-400 text-sm">
+                    <span id="detail-updated" class="hidden text-gray-500 dark:text-gray-400">
                         <i class="fas fa-clock mr-1"></i>
                         <span class="update-text">Diperbarui</span>
                     </span>
                 </div>
 
                 <!-- Isi Catatan -->
-                <div id="detail-content" class="prose prose-slate dark:prose-invert max-w-none text-lg leading-relaxed">
+                <div id="detail-content" class="prose prose-slate dark:prose-invert prose-sm sm:prose-base max-w-none leading-relaxed">
                     <!-- Konten catatan akan dimuat di sini -->
                 </div>
             </div>
@@ -563,7 +445,7 @@
     
     <!-- Firebase SDK dan JavaScript Aplikasi -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/app.js?v=20260303-1"></script>
 </body>
 </html>
 

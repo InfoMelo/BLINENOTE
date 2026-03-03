@@ -1,25 +1,792 @@
-/* Image styling for editor and note detail */
+/* ═══════════════════════════════════════════
+   BLineNote — Professional UI Stylesheet
+   ═══════════════════════════════════════════ */
+
+/* ── Base Transitions ── */
+button,
+input,
+select,
+textarea {
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ── Custom Scrollbar ── */
+.notes-scroll::-webkit-scrollbar,
+#detail-content::-webkit-scrollbar,
+#gemini-content::-webkit-scrollbar {
+    width: 4px;
+}
+.notes-scroll::-webkit-scrollbar-track,
+#detail-content::-webkit-scrollbar-track,
+#gemini-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.notes-scroll::-webkit-scrollbar-thumb,
+#detail-content::-webkit-scrollbar-thumb,
+#gemini-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+}
+.dark .notes-scroll::-webkit-scrollbar-thumb,
+.dark #detail-content::-webkit-scrollbar-thumb,
+.dark #gemini-content::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+/* Firefox */
+.notes-scroll,
+#detail-content,
+#gemini-content {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+.dark .notes-scroll,
+.dark #detail-content,
+.dark #gemini-content {
+    scrollbar-color: #475569 transparent;
+}
+
+/* ── Display Flex Utility ── */
+.display-flex:not(.hidden) {
+    display: flex;
+}
+
+/* ── Image Styling ── */
 #hasil-teks img.note-image,
 #detail-content img.note-image {
     max-width: 100%;
     height: auto;
     border-radius: 8px;
     display: block;
+    margin: 0.5rem 0;
 }
-
 #hasil-teks figure.note-figure,
 #detail-content figure.note-figure {
     margin: 0.5rem 0;
 }
-
 #hasil-teks figcaption.note-caption,
 #detail-content figcaption.note-caption {
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: #64748b;
     margin-top: 0.25rem;
 }
-
 .dark #hasil-teks figcaption.note-caption,
 .dark #detail-content figcaption.note-caption {
     color: #94a3b8;
+}
+
+/* ═══ Topbar ═══ */
+#main-navbar {
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    z-index: 50;
+}
+.dark #main-navbar {
+    background-color: #1e293b;
+    border-bottom-color: #334155;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* ═══ Glass Card ═══ */
+.glass-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+.dark .glass-card {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+/* ═══ Toolbar Buttons ═══ */
+.toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+    position: relative;
+}
+.toolbar-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+.dark .toolbar-btn {
+    color: #94a3b8;
+}
+.dark .toolbar-btn:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+.toolbar-btn.active,
+.toolbar-btn.auto-url-enabled {
+    background: #6366f1;
+    color: #fff;
+    box-shadow: none;
+}
+
+/* ═══ Editor Area ═══ */
+#hasil-teks {
+    cursor: text !important;
+    caret-color: #000000 !important;
+}
+#hasil-teks:empty::before {
+    content: attr(placeholder);
+    color: #94a3b8;
+    pointer-events: none;
+    font-style: italic;
+}
+.dark #hasil-teks:empty::before {
+    color: #64748b;
+}
+#hasil-teks:focus {
+    outline: none;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="tel"],
+textarea,
+[contenteditable="true"],
+#hasil-teks {
+    cursor: text !important;
+    caret-color: #000000 !important;
+}
+
+[contenteditable="true"]:empty::before,
+[contenteditable]:empty::before {
+    pointer-events: none !important;
+}
+
+#editor-card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+#editor-card:focus-within {
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.12);
+    border-color: rgba(99,102,241,0.3);
+}
+.dark #editor-card:focus-within {
+    box-shadow: 0 0 0 2px rgba(129,140,248,0.18);
+    border-color: rgba(99,102,241,0.4);
+}
+
+/* Tag input */
+#tag-input {
+    font-size: 0.8rem;
+    height: 30px;
+}
+
+/* ═══ Notes List ═══ */
+.note-card {
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    border: 1px solid transparent;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+.note-card:hover {
+    transform: translateY(-2px);
+    border-color: #6366f1;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.dark .note-card:hover {
+    border-color: #818cf8;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+}
+.note-card p,
+.note-card .note-preview {
+    font-size: 0.8rem !important;
+    line-height: 1.45 !important;
+}
+
+/* ═══ Search Input ═══ */
+#search-input {
+    font-size: 0.85rem;
+    height: 34px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+#search-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+
+/* ═══ Filter & Sort Buttons (base transition) ═══ */
+.quick-filter-btn {
+    transition: background-color 0.15s ease, color 0.15s ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* ═══ Status Message ═══ */
+#status {
+    font-size: 0.75rem;
+    height: 18px;
+    transition: opacity 0.3s ease;
+}
+
+#status-div {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    max-width: min(90vw, 360px);
+    padding: 0.7rem 0.95rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    background: rgba(15, 23, 42, 0.92);
+    color: #f8fafc;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.dark #status-div {
+    background: rgba(2, 6, 23, 0.95);
+}
+
+/* ═══ Mobile Navigation ═══ */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#mobile-nav button {
+    position: relative;
+    transition: color 0.2s ease;
+}
+#mobile-nav button.active {
+    color: #6366f1;
+}
+.dark #mobile-nav button.active {
+    color: #818cf8;
+}
+
+/* ═══ FAB Buttons ═══ */
+#fab-rekam,
+#fab-pause {
+    position: fixed;
+    transition: box-shadow 0.2s ease;
+}
+#fab-rekam:hover,
+#fab-pause:hover {
+    box-shadow: 0 4px 10px rgba(15,23,42,0.14);
+}
+
+/* ═══ Modal Backdrops ═══ */
+#modal-pengaturan,
+#modal-hapus,
+#modal-gemini {
+    transition: opacity 0.12s ease;
+}
+
+/* ═══ Detail Page ═══ */
+#note-detail-page {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.dark #note-detail-page {
+    background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+}
+
+#detail-header {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+#detail-card {
+    border-radius: 14px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.dark #detail-card {
+    border-color: rgba(51, 65, 85, 0.8);
+    box-shadow: 0 10px 26px rgba(2, 6, 23, 0.34);
+}
+
+#detail-metadata > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(241, 245, 249, 0.9);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.dark #detail-metadata > span {
+    background: rgba(30, 41, 59, 0.55);
+    border-color: rgba(51, 65, 85, 0.8);
+}
+
+#detail-content {
+    color: #1f2937;
+    line-height: 1.8;
+    word-break: break-word;
+}
+
+.dark #detail-content {
+    color: #e2e8f0;
+}
+
+#detail-content p,
+#detail-content ul,
+#detail-content ol,
+#detail-content pre,
+#detail-content blockquote {
+    margin-top: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+#detail-content a {
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 2px;
+}
+
+#close-detail-btn,
+#detail-ai-btn,
+#detail-speak-btn,
+#detail-edit-btn,
+#detail-delete-btn {
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+#detail-ai-btn:hover,
+#detail-speak-btn:hover,
+#detail-edit-btn:hover,
+#detail-delete-btn:hover {
+    transform: translateY(-1px);
+}
+
+/* ═══ Auth Page ═══ */
+/* intentionally minimal for mature UI */
+
+/* ═══ Loader ═══ */
+.loader {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+.dark .loader {
+    border-color: #334155;
+    border-top-color: #818cf8;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ═══ Responsive Tweaks ═══ */
+@media (max-width: 767px) {
+    /* Tighter main container on mobile */
+    #main-content-container .container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    
+    /* Editor card compact mobile */
+    #editor-card {
+        padding: 12px !important;
+        border-radius: 10px !important;
+    }
+    
+    /* Smaller toolbar on mobile */
+    .toolbar-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+    }
+    
+    /* Notes container max-height mobile */
+    #catatan-tersimpan-container {
+        max-height: calc(100vh - 16rem);
+    }
+    
+    /* Detail page mobile */
+    #note-detail-page .prose {
+        font-size: 0.9rem;
+    }
+}
+
+@media (min-width: 768px) {
+    /* Desktop: notes sidebar has fixed height scroll */
+    #catatan-tersimpan-container {
+        max-height: calc(100vh - 14rem);
+    }
+}
+
+/* ═══ Selection ═══ */
+::selection {
+    background: rgba(99,102,241,0.2);
+    color: inherit;
+}
+.dark ::selection {
+    background: rgba(129,140,248,0.3);
+}
+
+/* ═══════════════════════════════════════════
+   Layout Refactoring – 2-Column Side-by-Side
+   ═══════════════════════════════════════════ */
+
+/* Desktop: paksa 2-kolom grid (65% editor + 35% catatan) */
+@media (min-width: 1024px) {
+    #app-container {
+        display: grid !important;
+        grid-template-columns: 65fr 35fr !important;
+        gap: 1.5rem !important;
+        align-items: start;
+    }
+
+    /* Panel catatan kanan: sticky, scroll mandiri */
+    #notes-view {
+        position: sticky;
+        top: 3.7rem;
+        max-height: calc(100vh - 4.3rem);
+        overflow-y: auto;
+    }
+}
+
+/* Mobile: 1-kolom bersusun */
+@media (max-width: 1023px) {
+    #app-container {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Avatar user: paksa tampil sebagai lingkaran sempurna */
+#user-avatar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+    background-color: #e5e7eb !important;
+    color: #374151 !important;
+    border: none !important;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+/* Text truncation: potong konten catatan max 2 baris */
+.note-card .note-content {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    overflow: hidden !important;
+    line-height: 1.5 !important;
+    max-height: 3em !important;
+    font-size: 0.8rem;
+    word-break: break-word;
+}
+
+/* Hapus margin prose pada child agar line-clamp dihitung dari teks, bukan margin */
+.note-card .note-content p,
+.note-card .note-content ul,
+.note-card .note-content ol,
+.note-card .note-content h1,
+.note-card .note-content h2,
+.note-card .note-content h3,
+.note-card .note-content h4,
+.note-card .note-content li,
+.note-card .note-content blockquote {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Tombol Rekam: saat aktif merekam, switch ke solid merah */
+#tombol-rekam.recording-indicator {
+    background-color: #dc2626 !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    animation: pulse 1.5s infinite;
+}
+.dark #tombol-rekam.recording-indicator {
+    background-color: #b91c1c !important;
+}
+
+/* ═══ UI Refresh 2026 ═══ */
+body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* Auth layout */
+#auth-page-container {
+    padding: 1.25rem;
+}
+
+#auth-page-container .glass-card {
+    max-width: 27.5rem;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.dark #auth-page-container .glass-card {
+    border-color: #334155;
+    box-shadow: 0 20px 45px rgba(2, 6, 23, 0.45);
+}
+
+#login-form input,
+#signup-form input {
+    min-height: 42px;
+    border-radius: 10px;
+}
+
+#tombol-submit-login,
+#tombol-submit-daftar {
+    min-height: 42px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+#auth-toggle-btn,
+#auth-toggle-btn-2 {
+    font-weight: 500;
+}
+
+/* Main layout */
+#main-content-container > .container {
+    padding-top: 4.5rem;
+}
+
+#main-content-container > header {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+#main-content-container > header .container {
+    height: 3.5rem;
+}
+
+#editor-card {
+    border-radius: 16px;
+    border: 1px solid #dbe3ef;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.dark #editor-card {
+    border-color: #334155;
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35);
+}
+
+#formatting-toolbar {
+    gap: 0.35rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+#hasil-teks {
+    min-height: 230px;
+    padding: 0.25rem 0.1rem;
+    font-size: 0.98rem;
+}
+
+#template-selector,
+#insert-template-btn,
+#search-input,
+#tag-input {
+    border-radius: 10px;
+}
+
+/* Notes panel */
+#notes-view {
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 16px;
+    padding: 0.9rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.dark #notes-view {
+    background: rgba(30, 41, 59, 0.72);
+    border-color: rgba(51, 65, 85, 0.95);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35);
+}
+
+#search-input {
+    min-height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.dark #search-input {
+    background: rgba(15, 23, 42, 0.68);
+}
+
+/* ═══ Filter & Sort Bar ═══ */
+#filter-sort-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+}
+
+.filter-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.dark .filter-label {
+    color: #94a3b8;
+}
+
+.quick-filter-btn {
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background-color: #f1f5f9;
+    color: #475569;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.quick-filter-btn:hover {
+    background-color: #e2e8f0;
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+.quick-filter-btn.active {
+    background-color: #6366f1;
+    color: #ffffff;
+    border-color: transparent;
+}
+
+.dark .quick-filter-btn {
+    background-color: #1e293b;
+    color: #94a3b8;
+}
+
+.dark .quick-filter-btn:hover {
+    background-color: #334155;
+}
+
+.dark .quick-filter-btn.active {
+    background-color: #6366f1;
+    color: #ffffff;
+}
+
+#sort-select {
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.22rem 2rem 0.22rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background-color: #f1f5f9;
+    color: #475569;
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+#sort-select:hover {
+    background-color: #e2e8f0;
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+#sort-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+}
+
+.dark #sort-select {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+.dark #sort-select:hover {
+    background-color: #334155;
+}
+
+#catatan-tersimpan-container {
+    padding-right: 0.25rem;
+    margin-top: 0.2rem;
+}
+
+.note-card {
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0;
+    background: rgba(255, 255, 255, 0.9);
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.note-card:hover {
+    transform: translateY(-2px);
+    border-color: #6366f1;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.dark .note-card {
+    border-color: #334155;
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.dark .note-card:hover {
+    border-color: #818cf8;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+}
+
+/* Mobile refinement */
+@media (max-width: 767px) {
+    #main-content-container > .container {
+        padding-top: 4rem;
+        padding-bottom: 5.2rem;
+    }
+
+    #notes-view {
+        padding: 0.75rem;
+        border-radius: 14px;
+    }
+
+    #hasil-teks {
+        min-height: 180px;
+        font-size: 0.95rem;
+    }
+
+    #mobile-nav {
+        height: 3.65rem;
+        box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    #fab-rekam,
+    #fab-pause {
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.28);
+    }
 }

@@ -18,6 +18,8 @@ const logger = {
     debug: APP_CONFIG.debug ? console.log.bind(console) : () => {}
 };
 
+const isLocalDevelopment = () => APP_CONFIG.environment === 'development' || window.location.hostname === '';
+
 // Basic escaping for safe string interpolation in HTML
 const escapeHTML = (value = '') => String(value).replace(/[&<>"']/g, (char) => {
     const escapeMap = {
@@ -96,7 +98,7 @@ const createNoteElement = (note) => {
         </div>
         <div class="flex justify-between items-center mt-3 text-xs text-slate-500">
             <span>${note.wordCount} kata | ${note.characterCount} karakter</span>
-            <button class="text-red-500 hover:text-red-600" onclick="deleteNote('${note.id}')">Hapus</button>
+            <button class="text-red-500 hover:text-red-600" data-note-action="delete" data-note-id="${note.id}">Hapus</button>
         </div>
     `;
     
@@ -303,12 +305,7 @@ const saveNote = async (isAutoSave = false) => {
         }
         
         // Check if running in development mode (localhost)
-        const forceProductionMode = true; // Set to false to re-enable dev mode
-        const isLocalhost = !forceProductionMode && (
-            window.location.hostname === 'localhost' || 
-            window.location.hostname === '127.0.0.1' || 
-            window.location.hostname === ''
-        );
+        const isLocalhost = isLocalDevelopment();
         
         // Authentication check - allow localhost testing
         if (!userId && !isLocalhost) {
@@ -1367,12 +1364,12 @@ const renderNotes = (notesToRender = allNotes, append = false) => {
                         ${safeTag ? `<span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full mb-2">${safeTag}</span>` : ''}
                     </div>
                     <div class="flex space-x-1 ml-2">
-                        <button onclick="window.editNote('${note.id}')" 
+                        <button data-note-action="edit" data-note-id="${note.id}"
                                 class="p-1.5 text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-md transition-colors text-sm" 
                                 title="Edit catatan">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button onclick="window.deleteNote('${note.id}')" 
+                        <button data-note-action="delete" data-note-id="${note.id}"
                                 class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors text-sm" 
                                 title="Hapus catatan">
                             <i class="fas fa-trash"></i>
@@ -1396,7 +1393,7 @@ const renderNotes = (notesToRender = allNotes, append = false) => {
                         })}
                         ${note.updatedAt && note.updatedAt !== note.timestamp ? ' • Diperbarui' : ''}
                     </div>
-                    <button onclick="window.viewNoteDetail('${note.id}')" 
+                    <button data-note-action="view" data-note-id="${note.id}"
                             class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1" 
                             title="Lihat catatan lengkap">
                         <i class="fas fa-eye"></i>
@@ -1440,7 +1437,7 @@ const showLoadMoreButton = (show) => {
         loadMoreBtn.id = 'load-more-btn';
         loadMoreBtn.className = 'w-full py-3 mt-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors';
         loadMoreBtn.textContent = 'Muat Lebih Banyak';
-        loadMoreBtn.onclick = loadMoreNotes;
+        loadMoreBtn.addEventListener('click', loadMoreNotes);
         elements.catatanContainer.insertAdjacentElement('afterend', loadMoreBtn);
     } else if (!show && loadMoreBtn) {
         loadMoreBtn.remove();
@@ -1458,7 +1455,7 @@ const renderTagFilters = (notes) => {
     if (!container) return;
     
     const allButton = `
-        <button onclick="window.filterByTag('all')" 
+        <button data-tag="all"
                 class="tag-filter px-3 py-1 rounded-full text-sm transition-colors duration-200 ${activeTagFilter === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">
             Semua (${notes.length})
         </button>
@@ -1468,7 +1465,7 @@ const renderTagFilters = (notes) => {
         const count = notes.filter(note => note.tag === tag).length;
         const safeTag = escapeHTML(tag);
         return `
-            <button onclick="window.filterByTag('${tag}')" 
+            <button data-tag="${safeTag}" 
                     class="tag-filter px-3 py-1 rounded-full text-sm transition-colors duration-200 ${activeTagFilter === tag ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}">
                 ${safeTag} (${count})
             </button>
@@ -1547,31 +1544,13 @@ const updateFilterUI = () => {
     Object.keys(dateButtons).forEach(key => {
         const btn = dateButtons[key];
         if (btn) {
-            if (activeDateFilter === key) {
-                btn.className = 'quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm';
-            } else {
-                btn.className = 'quick-filter-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600';
-            }
+            btn.classList.toggle('active', activeDateFilter === key);
         }
     });
     
-    // Update sort buttons
-    const sortButtons = {
-        'newest': document.getElementById('sort-newest'),
-        'oldest': document.getElementById('sort-oldest'),
-        'alphabetical': document.getElementById('sort-alpha')
-    };
-    
-    Object.keys(sortButtons).forEach(key => {
-        const btn = sortButtons[key];
-        if (btn) {
-            if (currentSortOrder === key) {
-                btn.className = 'quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-indigo-500 text-white shadow-sm';
-            } else {
-                btn.className = 'quick-sort-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600';
-            }
-        }
-    });
+    // Sync sort dropdown
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect) sortSelect.value = currentSortOrder;
     
     // Update active filters badges
     updateActiveFiltersBadges();
@@ -1611,7 +1590,7 @@ const updateActiveFiltersBadges = () => {
         badges.push(`
             <span class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-full">
                 ${dateLabels[activeDateFilter]}
-                <button onclick="window.setDateFilter('all')" class="hover:text-indigo-900 dark:hover:text-indigo-100 transition-colors">
+                <button data-badge-action="reset-date" class="hover:text-indigo-900 dark:hover:text-indigo-100 transition-colors">
                     ✕
                 </button>
             </span>
@@ -1627,7 +1606,7 @@ const updateActiveFiltersBadges = () => {
         badges.push(`
             <span class="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full">
                 ${sortLabels[currentSortOrder]}
-                <button onclick="window.setSortOrder('newest')" class="hover:text-purple-900 dark:hover:text-purple-100 transition-colors">
+                <button data-badge-action="reset-sort" class="hover:text-purple-900 dark:hover:text-purple-100 transition-colors">
                     ✕
                 </button>
             </span>
@@ -1639,7 +1618,7 @@ const updateActiveFiltersBadges = () => {
         badges.push(`
             <span class="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
                 🏷️ ${escapeHTML(activeTagFilter)}
-                <button onclick="window.filterByTag('all')" class="hover:text-blue-900 dark:hover:text-blue-100 transition-colors">
+                <button data-badge-action="reset-tag" class="hover:text-blue-900 dark:hover:text-blue-100 transition-colors">
                     ✕
                 </button>
             </span>
@@ -1651,7 +1630,7 @@ const updateActiveFiltersBadges = () => {
         badges.push(`
             <span class="inline-flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs font-medium rounded-full">
                 🔍 "${escapeHTML(searchTerm)}"
-                <button onclick="window.clearSearch()" class="hover:text-green-900 dark:hover:text-green-100 transition-colors">
+                <button data-badge-action="reset-search" class="hover:text-green-900 dark:hover:text-green-100 transition-colors">
                     ✕
                 </button>
             </span>
@@ -1754,7 +1733,7 @@ const showStatus = (message, { type = 'info', duration = 0 } = {}) => {
         statusTimeout = null;
     }
     // Reset classes
-    elements.statusDiv.className = 'mb-4 text-center text-sm h-5 transition-opacity duration-300';
+    elements.statusDiv.className = 'status-toast text-sm';
     switch (type) {
         case 'success':
             elements.statusDiv.classList.add('text-green-500');
@@ -1773,13 +1752,14 @@ const showStatus = (message, { type = 'info', duration = 0 } = {}) => {
     }
     elements.statusDiv.textContent = message;
     elements.statusDiv.style.opacity = '1';
+    elements.statusDiv.style.transform = 'translateY(0)';
     if (duration > 0) {
         statusTimeout = setTimeout(() => {
             elements.statusDiv.style.opacity = '0';
+            elements.statusDiv.style.transform = 'translateY(8px)';
             setTimeout(() => {
                 if (elements.statusDiv.style.opacity === '0') {
                     elements.statusDiv.textContent = '';
-                    elements.statusDiv.style.opacity = '1';
                 }
             }, 300);
         }, duration);
@@ -2436,12 +2416,7 @@ window.deleteNote = async (noteId) => {
         showStatus('🗑️ Menghapus catatan...', { type: 'loading' });
         
         // Check if running in development mode (localhost)
-        const forceProductionMode = true; // Set to false to re-enable dev mode
-        const isLocalhost = !forceProductionMode && (
-            window.location.hostname === 'localhost' || 
-            window.location.hostname === '127.0.0.1' || 
-            window.location.hostname === ''
-        );
+        const isLocalhost = isLocalDevelopment();
         
         if (isLocalhost && !userId) {
             // Handle local development deletion
@@ -2693,10 +2668,9 @@ const setupEventListeners = () => {
     }
     
     // Checkbox button control
-    const checkboxButton = document.querySelector('button[onclick*="insertCheckbox"]');
+    const checkboxButton = document.querySelector('button[data-toolbar-action="insert-checkbox"]');
     if (checkboxButton) {
         console.log('✅ Checkbox button found, adding event listener');
-        checkboxButton.removeAttribute('onclick'); // Remove inline onclick
         checkboxButton.addEventListener('click', () => {
             console.log('🔧 Checkbox button clicked');
             window.insertCheckbox();
@@ -2897,12 +2871,83 @@ const setupEventListeners = () => {
     
     // Search and filters
     if (elements.searchInput) elements.searchInput.addEventListener('input', applyFilters);
+
+    const formattingToolbar = document.getElementById('formatting-toolbar');
+    if (formattingToolbar) {
+        formattingToolbar.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            const formatCommand = button.dataset.formatCommand;
+            const toolbarAction = button.dataset.toolbarAction;
+
+            if (formatCommand) {
+                window.formatCommand(formatCommand);
+                return;
+            }
+
+            if (toolbarAction === 'toggle-highlight') window.toggleHighlight();
+            if (toolbarAction === 'insert-checkbox') window.insertCheckbox();
+            if (toolbarAction === 'insert-link') window.insertLink();
+            if (toolbarAction === 'remove-link') window.removeLink();
+            if (toolbarAction === 'insert-line-break') window.insertLineBreak();
+            if (toolbarAction === 'toggle-auto-url') window.toggleAutoURLDetection();
+        });
+    }
+
+    const dateFilterButtons = {
+        'filter-all': 'all',
+        'filter-today': 'today',
+        'filter-week': 'week',
+        'filter-month': 'month'
+    };
+    Object.entries(dateFilterButtons).forEach(([id, value]) => {
+        const button = document.getElementById(id);
+        if (button) button.addEventListener('click', () => window.setDateFilter(value));
+    });
+
+    const sortSelect = document.getElementById('sort-select');
+    if (sortSelect) sortSelect.addEventListener('change', () => window.setSortOrder(sortSelect.value));
+
+    const clearAllFiltersBtn = document.getElementById('clear-all-filters');
+    if (clearAllFiltersBtn) clearAllFiltersBtn.addEventListener('click', () => window.clearAllFilters());
+
     if (elements.tagFiltersContainer) {
         elements.tagFiltersContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tag-filter')) {
-                const tag = e.target.onclick.toString().match(/'([^']+)'/)?.[1] || 'all';
+            const button = e.target.closest('.tag-filter');
+            if (button) {
+                const tag = button.dataset.tag || 'all';
                 filterByTag(tag);
             }
+        });
+    }
+
+    if (elements.catatanContainer) {
+        elements.catatanContainer.addEventListener('click', (e) => {
+            const actionButton = e.target.closest('[data-note-action]');
+            if (!actionButton) return;
+
+            const action = actionButton.dataset.noteAction;
+            const noteId = actionButton.dataset.noteId;
+            if (!noteId) return;
+
+            if (action === 'edit') window.editNote(noteId);
+            if (action === 'delete') window.deleteNote(noteId);
+            if (action === 'view') window.viewNoteDetail(noteId);
+        });
+    }
+
+    const activeFiltersContainer = document.getElementById('active-filters-container');
+    if (activeFiltersContainer) {
+        activeFiltersContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-badge-action]');
+            if (!button) return;
+
+            const action = button.dataset.badgeAction;
+            if (action === 'reset-date') window.setDateFilter('all');
+            if (action === 'reset-sort') window.setSortOrder('newest');
+            if (action === 'reset-tag') window.filterByTag('all');
+            if (action === 'reset-search') window.clearSearch();
         });
     }
     
@@ -2954,15 +2999,8 @@ const setupEventListeners = () => {
 // ================================
 
 const initializeAuth = () => {
-    // Force production mode - disable development mode detection
-    const forceProductionMode = true; // Set to false to re-enable dev mode
-    
     // Check if running in development mode (localhost)
-    const isLocalhost = !forceProductionMode && (
-        window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' || 
-        window.location.hostname === ''
-    );
+    const isLocalhost = isLocalDevelopment();
     
     if (isLocalhost) {
         console.log('🧪 Development mode detected - using localStorage');
@@ -2984,6 +3022,8 @@ const initializeAuth = () => {
         if (user) {
             userId = user.uid;
             elements.userEmail.textContent = user.email;
+            const _av = document.getElementById('user-avatar');
+            if (_av) _av.textContent = user.email.charAt(0).toUpperCase();
             
             // Show app, hide auth
             elements.authPageContainer.style.display = 'none';
@@ -3140,7 +3180,7 @@ const updateToolbarButtonStates = () => {
     const commands = ['bold', 'italic', 'underline'];
     
     commands.forEach(command => {
-        const button = document.querySelector(`button[onclick="formatCommand('${command}')"]`);
+        const button = document.querySelector(`button[data-format-command="${command}"]`);
         if (button) {
             if (document.queryCommandState(command)) {
                 button.classList.add('active');
@@ -3825,6 +3865,9 @@ document.addEventListener('selectionchange', () => {
 // ================================
 
 let currentDetailNoteId = null;
+let activeGeminiController = null;
+const GEMINI_TIMEOUT_MS = 15000;
+let geminiWatchdogTimer = null;
 
 // Open note detail page
 window.viewNoteDetail = (noteId) => {
@@ -3909,12 +3952,162 @@ const closeNoteDetail = () => {
     currentDetailNoteId = null;
 };
 
+const openGeminiModal = (title = 'Hasil dari Gemini AI') => {
+    const modal = document.getElementById('modal-gemini');
+    const titleEl = document.getElementById('gemini-title');
+    const loaderEl = document.getElementById('gemini-loader');
+    const resultEl = document.getElementById('gemini-result-text');
+
+    if (!modal || !titleEl || !loaderEl || !resultEl) return;
+
+    titleEl.textContent = title;
+    resultEl.textContent = '';
+    loaderEl.classList.remove('hidden');
+    modal.classList.remove('hidden');
+
+    if (geminiWatchdogTimer) {
+        clearTimeout(geminiWatchdogTimer);
+    }
+
+    geminiWatchdogTimer = setTimeout(() => {
+        if (!loaderEl.classList.contains('hidden')) {
+            setGeminiResult('⏱️ Proses AI memakan waktu terlalu lama. Coba ulangi, pendekkan teks, atau cek koneksi internet/API key.', true);
+            showStatus('⏱️ Proses Gemini terlalu lama', { type: 'warning', duration: 4000 });
+        }
+    }, GEMINI_TIMEOUT_MS + 1000);
+};
+
+const setGeminiResult = (text, isError = false) => {
+    const loaderEl = document.getElementById('gemini-loader');
+    const resultEl = document.getElementById('gemini-result-text');
+
+    if (!loaderEl || !resultEl) return;
+
+    if (geminiWatchdogTimer) {
+        clearTimeout(geminiWatchdogTimer);
+        geminiWatchdogTimer = null;
+    }
+
+    loaderEl.classList.add('hidden');
+    resultEl.textContent = text || '';
+    resultEl.classList.toggle('text-red-500', isError);
+    resultEl.classList.toggle('dark:text-red-400', isError);
+};
+
+const closeGeminiModal = () => {
+    const modal = document.getElementById('modal-gemini');
+    const loaderEl = document.getElementById('gemini-loader');
+
+    if (activeGeminiController) {
+        activeGeminiController.abort();
+        activeGeminiController = null;
+    }
+
+    if (geminiWatchdogTimer) {
+        clearTimeout(geminiWatchdogTimer);
+        geminiWatchdogTimer = null;
+    }
+
+    if (loaderEl) loaderEl.classList.add('hidden');
+    if (modal) modal.classList.add('hidden');
+};
+
+const getGeminiApiKey = () => {
+    const fromStorage = localStorage.getItem('gemini_api_key') || localStorage.getItem('geminiApiKey');
+    const fromWindow = typeof window !== 'undefined' ? window.GEMINI_API_KEY : null;
+    return (fromStorage || fromWindow || '').trim();
+};
+
+const requestGeminiText = async (instruction, content) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error('Kunci Gemini API belum dikonfigurasi. Simpan di localStorage key: gemini_api_key.');
+    }
+
+    const controller = new AbortController();
+    activeGeminiController = controller;
+    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+                contents: [
+                    {
+                        parts: [
+                            { text: `${instruction}\n\n${content}` }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 1024
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini API error (${response.status}): ${errorText || 'Unknown error'}`);
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).filter(Boolean).join('\n') || '';
+
+        if (!text) {
+            throw new Error('Respon Gemini kosong.');
+        }
+
+        return text;
+    } finally {
+        clearTimeout(timeoutId);
+        activeGeminiController = null;
+    }
+};
+
+const runGeminiAction = async (instruction, title) => {
+    const note = allNotes.find(n => n.id === currentDetailNoteId);
+    const selectedText = window.getSelection()?.toString()?.trim();
+    const editorText = elements?.hasilTeksDiv?.innerText?.trim() || stripHTML(elements?.hasilTeksDiv?.innerHTML || '');
+    const noteText = selectedText || note?.text || stripHTML(note?.html || '') || editorText;
+
+    if (!noteText?.trim()) {
+        showStatus('⚠️ Tidak ada teks untuk diproses AI', { type: 'warning', duration: 3000 });
+        return;
+    }
+
+    openGeminiModal(title || 'Hasil dari Gemini AI');
+
+    try {
+        const result = await requestGeminiText(instruction, noteText);
+        setGeminiResult(result, false);
+        showStatus('✅ Hasil Gemini berhasil dimuat', { type: 'success', duration: 3000 });
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            setGeminiResult('⏱️ Permintaan ke Gemini timeout (15 detik). Coba lagi dengan teks yang lebih pendek atau koneksi lebih stabil.', true);
+            showStatus('⏱️ Gemini timeout', { type: 'warning', duration: 4000 });
+            return;
+        }
+
+        console.error('❌ Gemini request failed:', error);
+        setGeminiResult(`❌ Gagal memproses dengan Gemini.\n\n${error.message || 'Terjadi kesalahan tidak diketahui.'}`, true);
+        showStatus('❌ Gagal memuat hasil Gemini', { type: 'error', duration: 4000 });
+    }
+};
+
 // Setup detail page event listeners
 const setupDetailPageListeners = () => {
     const closeBtn = document.getElementById('close-detail-btn');
     const speakBtn = document.getElementById('detail-speak-btn');
     const editBtn = document.getElementById('detail-edit-btn');
     const deleteBtn = document.getElementById('detail-delete-btn');
+    const aiBtn = document.getElementById('detail-ai-btn');
+    const aiMenu = document.getElementById('ai-menu');
+    const closeGeminiBtn = document.getElementById('tombol-tutup-gemini');
+    const copyGeminiBtn = document.getElementById('tombol-salin-gemini');
+    const geminiModal = document.getElementById('modal-gemini');
     
     if (closeBtn) {
         closeBtn.addEventListener('click', closeNoteDetail);
@@ -3945,6 +4138,63 @@ const setupDetailPageListeners = () => {
             if (currentDetailNoteId) {
                 closeNoteDetail();
                 window.deleteNote(currentDetailNoteId);
+            }
+        });
+    }
+
+    if (aiBtn && aiMenu) {
+        aiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const rect = aiBtn.getBoundingClientRect();
+            aiMenu.style.top = `${rect.bottom + window.scrollY + 8}px`;
+            aiMenu.style.left = `${Math.max(16, rect.left + window.scrollX - 120)}px`;
+            aiMenu.classList.toggle('hidden');
+        });
+
+        aiMenu.addEventListener('click', async (e) => {
+            const actionButton = e.target.closest('.ai-action-item');
+            if (!actionButton) return;
+
+            aiMenu.classList.add('hidden');
+            const instruction = actionButton.dataset.prompt || 'Ringkas teks berikut:';
+            const title = actionButton.dataset.title || 'Hasil dari Gemini AI';
+
+            await runGeminiAction(instruction, title);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!aiMenu.contains(e.target) && e.target !== aiBtn && !aiBtn.contains(e.target)) {
+                aiMenu.classList.add('hidden');
+            }
+        });
+    }
+
+    if (closeGeminiBtn) {
+        closeGeminiBtn.addEventListener('click', closeGeminiModal);
+    }
+
+    if (copyGeminiBtn) {
+        copyGeminiBtn.addEventListener('click', async () => {
+            const resultText = document.getElementById('gemini-result-text')?.textContent?.trim() || '';
+            if (!resultText) {
+                showStatus('⚠️ Tidak ada teks untuk disalin', { type: 'warning', duration: 3000 });
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(resultText);
+                showStatus('✅ Hasil Gemini disalin', { type: 'success', duration: 2500 });
+            } catch (error) {
+                console.error('❌ Copy failed:', error);
+                showStatus('❌ Gagal menyalin hasil Gemini', { type: 'error', duration: 3000 });
+            }
+        });
+    }
+
+    if (geminiModal) {
+        geminiModal.addEventListener('click', (e) => {
+            if (e.target === geminiModal) {
+                closeGeminiModal();
             }
         });
     }
